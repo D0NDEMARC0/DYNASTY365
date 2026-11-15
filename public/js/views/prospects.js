@@ -2,7 +2,7 @@
 import { S, rows, tePremium } from '../store.js';
 import { loadProspects, loadPahowdy, collegeHeadshot, stars, mockText } from '../college.js';
 import { consensus, genericSlots, leagueSlots, runMock } from '../mock.js';
-import { userBoards, addBoard, removeBoard } from '../boards.js';
+import { userBoards, addBoard, removeBoard, updateBoard } from '../boards.js';
 import { ordinal } from '../model.js';
 import { esc, fmtInt, fmt1, heat, posTag, table, sortRows, nameMatch } from '../ui.js';
 import { mount } from './common.js';
@@ -14,6 +14,12 @@ const OTHER_BOARDS = [
   ['PFN mock draft index', cls => `https://www.profootballnetwork.com/nfl-draft-hq/mock-draft-index?year=${cls}`],
   ['FantasyPros devy consensus (free)', 'https://www.fantasypros.com/2026/01/devy-fantasy-football-rankings-2026'],
   ['KeepTradeCut devy', 'https://keeptradecut.com/devy-rankings'],
+  ['KeepTradeCut rookies', 'https://keeptradecut.com/dynasty-rankings/rookie-rankings'],
+  ['Draft Sharks TE premium', 'https://www.draftsharks.com/dynasty-rankings/te-premium'],
+  ['Dynasty Nerds rookies', 'https://www.dynastynerds.com/dynasty-rankings/rookies/'],
+  ['Dynasty League Football', 'https://dynastyleaguefootball.com/rankings/'],
+  ['Footballguys rookies', 'https://www.footballguys.com/rankings/duration/dynasty-rookie'],
+  ['RotoBaller rookies', 'https://www.rotoballer.com/dynasty-rookie-rankings'],
   ['Footballguys devy', 'https://www.footballguys.com/rankings/duration/devy'],
   ['Draft Sharks rookies', 'https://www.draftsharks.com/dynasty-rankings/rookies/superflex'],
   ['FantasyPros rookies', 'https://www.fantasypros.com/nfl/rankings/dynasty-rookies-overall.php'],
@@ -128,17 +134,24 @@ export async function render(root, params, query) {
       <div class="bhead">
         <div>
           <h2 style="margin:0">Your boards</h2>
-          <p class="muted small" style="margin:4px 0 0">Paste a ranking or an NFL mock draft from any site you read (Footballguys, Draft Sharks, KeepTradeCut, a r/DynastyFF post, any 2027 mock). It counts as much as the online mock consensus and gets its own column; paste two or three and the board follows their consensus. It’s saved only in this browser. Quickest real consensus: FantasyPros publishes a free devy ranking (link below). Select the list, copy, and paste it here.</p>
+          <p class="muted small" style="margin:4px 0 0">Paste a ranking or mock draft from any site you read (KeepTradeCut, Draft Sharks, Dynasty Nerds, Dynasty League Football, Footballguys, RotoBaller, a r/DynastyFF post, any ${st.cls} mock) and say which format it’s for. One board for your format (${esc(fmtName)}) counts as much as the online mock consensus, and two or three count up to twice as much; boards for another format count half, adjusted to yours (a 1QB board’s QBs move up in superflex; a board without TE premium moves tight ends up when you use TE premium). Mark one as your base and the order starts from it (it counts about as much as everything else together), with the other signals still moving players. Each gets its own column; paste two or three and the board follows their consensus. These sites don’t allow apps to collect their rankings, so copy them yourself: they’re saved only in this browser.</p>
         </div>
         ${st.adding ? '' : '<button class="btn" data-act="addboard">+ Paste a board or mock</button>'}
       </div>
       ${st.adding ? `<div class="bform">
         <input type="text" data-k="bname" placeholder="Source (e.g. Footballguys)" maxlength="32">
+        <div class="toolbar" style="margin:0"><select data-k="bqb" aria-label="QB format"><option value="">Any QB format</option><option value="1" ${sf ? '' : 'selected'}>1QB</option><option value="2" ${sf ? 'selected' : ''}>Superflex</option></select>
+          <select data-k="btep" aria-label="TE premium"><option value="">No TE premium</option><option value="1" ${tep ? 'selected' : ''}>TE premium</option></select>
+          <label class="small"><input type="checkbox" data-k="bbase"> Use as my base</label></div>
         <textarea data-k="btext" rows="8" placeholder="One player per line, best first. Rankings or mock drafts both work, e.g.&#10;1. Jeremiah Smith WR Ohio State&#10;2. Raiders — Julian Sayin, QB, Ohio State"></textarea>
         <div class="toolbar" style="margin:0"><button class="btn primary" data-act="saveboard">Add board</button><button class="btn" data-act="cancelboard">Cancel</button><span class="small" data-bmsg></span></div>
       </div>` : ''}
       ${st.msg ? `<p class="small" style="margin:8px 0 0">${st.msg}</p>` : ''}
-      ${boards.length ? `<ul class="blist">${boards.map(b => `<li><b>${esc(b.name)}</b> <span class="muted small">${b.matched} matched · added ${esc(b.date)}</span> <button class="linkbtn" data-act="rmboard" data-id="${esc(b.id)}">Remove</button>
+      ${boards.length ? `<ul class="blist">${boards.map(b => `<li><b>${esc(b.name)}</b> <span class="muted small">${b.matched} matched · added ${esc(b.date)}</span>
+        <select class="bfmt" data-bfmt="qb" data-id="${esc(b.id)}" aria-label="QB format of ${esc(b.name)}"><option value="">Any QB format</option><option value="1" ${b.qb === '1' ? 'selected' : ''}>1QB</option><option value="2" ${b.qb === '2' ? 'selected' : ''}>Superflex</option></select>
+        <select class="bfmt" data-bfmt="tep" data-id="${esc(b.id)}" aria-label="TE premium of ${esc(b.name)}"><option value="">No TE premium</option><option value="1" ${b.tep ? 'selected' : ''}>TE premium</option></select>
+        <label class="small" title="Your base board counts about as much as every other signal together"><input type="checkbox" class="bfmt" data-bfmt="base" data-id="${esc(b.id)}" ${b.base ? 'checked' : ''}> Base</label>
+        <button class="linkbtn" data-act="rmboard" data-id="${esc(b.id)}">Remove</button>
         ${b.unmatched.length ? `<details class="small"><summary>${b.unmatched.length} line${b.unmatched.length === 1 ? '' : 's'} not matched to a ${st.cls} prospect</summary><div class="muted">${b.unmatched.slice(0, 40).map(esc).join('<br>')}</div></details>` : ''}</li>`).join('')}</ul>` : ''}
       <p class="muted small" style="margin:10px 0 0">Compare: ${OTHER_BOARDS.map(([n, u]) => `<a class="link" href="${typeof u === 'function' ? u(st.cls) : u}" target="_blank" rel="noopener">${n}</a>`).join(' · ')}</p>
     </div>`;
@@ -265,7 +278,7 @@ export async function render(root, params, query) {
       if (a === 'cancelboard') { st.adding = false; st.msg = ''; draw(); return; }
       if (a === 'saveboard') {
         const name = el.querySelector('[data-k="bname"]')?.value || '', text = el.querySelector('[data-k="btext"]')?.value || '';
-        const r = addBoard(st.cls, name, text, classList);
+        const r = addBoard(st.cls, name, text, classList, { qb: el.querySelector('[data-k="bqb"]')?.value || '', tep: el.querySelector('[data-k="btep"]')?.value === '1', base: !!el.querySelector('[data-k="bbase"]')?.checked });
         if (r.error) { el.querySelector('[data-bmsg]').innerHTML = `<span class="down">${esc(r.error)}</span>`; return; }
         st.adding = false;
         st.msg = `Added <b>${esc(r.board.name)}</b>: ${r.res.matched} players matched${r.res.unmatched.length ? `, ${r.res.unmatched.length} lines not matched` : ''}.${r.warning ? ` <span class="down">${esc(r.warning)}</span>` : ''}`;
@@ -290,6 +303,14 @@ export async function render(root, params, query) {
     draw();
   });
   el.addEventListener('input', e => { if (e.target.dataset.k === 'q') { st.q = e.target.value; st.limit = 150; draw(); } });
+  // a saved board's format: re-rank with it
+  el.addEventListener('change', e => {
+    const f = e.target.dataset.bfmt;
+    if (!f) return;
+    updateBoard(st.cls, e.target.dataset.id, f === 'qb' ? { qb: e.target.value } : f === 'base' ? { base: e.target.checked } : { tep: e.target.value === '1' });
+    st.msg = '';
+    render(root, params, query);
+  });
 }
 
 function playerCell(p) {

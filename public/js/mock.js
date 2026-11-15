@@ -1,8 +1,19 @@
 // Rookie consensus board + mock draft engine (generic league or your Sleeper league).
-import { S, sleeper, tepTier } from './store.js';
+import { S, sleeper, tePremium } from './store.js';
 import { buildTeams } from './views/league.js';
 
 const market = p => (p.sid ? S.rowById.get(p.sid)?.market || null : null);
+
+/**
+ * How much earlier the k-th tight end of a class goes with a TE premium of pts per catch (k = 0 for the class's TE1).
+ * Measured on past rookie classes ordered by FantasyCalc's values: with TE-premium values (TEP+ leagues give 0.5 to
+ * 1.0 per catch, TEP++ more), the TE1 went about 25% earlier at TEP+ and 40% at TEP++, the TE2 20% and 30%, later tight
+ * ends 5-15%. Per point that's about 0.42 for the TE1, 0.31 for the TE2, 0.12 for the TE3 and 0.09 after:
+ * at +1 the TE1's slot ×0.66 (12th → 8th), the TE2's ×0.73, a TE4's ×0.91.
+ */
+const TE_K = [0.42, 0.31, 0.12, 0.09];
+export const teFactor = (pts, k = 0) => Math.exp(-TE_K[Math.min(k, TE_K.length - 1)] * (pts || 0));
+const fmtName = (qb, tep, base) => [qb === '1' ? '1QB' : qb === '2' ? 'SF' : '', tep ? 'TEP' : '', base ? 'your base' : ''].filter(Boolean).join(', ');
 
 /**
  * How the market drafts each position: the average overall slot of the k-th QB/RB/WR/TE in recent rookie
@@ -36,19 +47,29 @@ function positionalCurves(history) {
  * re-normalized to whatever exists for each player. For a player the community has ranked, the models can move him
  * at most 3× either way from that ranking. Position-neutral signals are mapped onto the market's positional curve:
  * the 2nd-best RB by score takes about the slot where 2nd RBs usually go in this format.
- * TE premium (FantasyCalc's tier: te+ or te++) works the same way: the curve comes from TE-premium market values, and
- * the expert rankings, which are made without it, move tight ends up.
+ * TE premium works the same way: the curve comes from FantasyCalc's TE-premium market values, and every ranking made
+ * without TE premium (the NFL mocks, expert ranks, ADP, projected NFL picks, boards you pasted for no TE premium)
+ * moves tight ends up by teFactor(your premium, his place among the class's tight ends), so +1 moves them more than
+ * +0.5 and the best tight ends the most. His place comes from the same board without TE premium.
+ * Boards you paste can say which format they're for: one made for your format counts fully, one made for another
+ * counts half, adjusted to yours (a 1QB board's QBs move up in superflex, a TE-premium board's TEs move down without it).
  */
-export function consensus(list, { sf, tep = tepTier(), history = [], boards = [] }) {
+export function consensus(list, { sf, tePts = tePremium(), history = [], boards = [], teOrder = null }) {
+  // with TE premium, first rank the class without it to know which tight end is the TE1, TE2…
+  if (tePts > 0 && !teOrder) {
+    const k = new Map();
+    consensus(list, { sf, tePts: 0, history, boards }).board.filter(x => x.p.pos === 'TE').forEach((x, i) => k.set(x.p, i));
+    return consensus(list, { sf, tePts, history, boards, teOrder: k });
+  }
   const rankBy = (get, asc) => {
     const have = list.filter(p => get(p) != null).sort((a, b) => (asc ? get(a) - get(b) : get(b) - get(a)));
     return new Map(have.map((p, i) => [p, i + 1]));
   };
   const curves = positionalCurves(history);
-  // 1QB, no-TE-premium ranks: QBs move up in superflex. With TE premium, past classes' tight ends went about 10%
-  // earlier (te+) or 18% earlier (te++) on FantasyCalc's TE-premium values, so tight ends move up as much.
-  const teMul = { 'te+': 0.9, 'te++': 0.82 }[tep] || 1;
-  const fmtAdj = p => (sf && p.pos === 'QB' ? 0.5 : p.pos === 'TE' ? teMul : 1);
+  // rankings made for 1QB without TE premium: QBs move up in superflex, tight ends with TE premium
+  const teMul = p => teFactor(tePts, teOrder?.get(p) ?? TE_K.length);
+  const teAdj = p => (p.pos === 'TE' ? teMul(p) : 1);
+  const fmtAdj = p => (sf && p.pos === 'QB' ? 0.5 : 1) * teAdj(p);
   // Half "where the i-th QB/RB/WR/TE of a class usually goes in this format", half the overall rank, so a weak RB1
   // doesn't jump the class.
   const curveSlot = (pos, i, overall) => {
@@ -76,29 +97,52 @@ export function consensus(list, { sf, tep = tepTier(), history = [], boards = []
   const mockSlots = new Map();
   if (mocked.length) {
     const k = {};
-    mocked.forEach((p, i) => mockSlots.set(p, curveSlot(p.pos, (k[p.pos] = (k[p.pos] || 0) + 1) - 1, i + 1)));
-    for (const p of list) if (!p.draft && !p.mock) mockSlots.set(p, curveSlot(p.pos, k[p.pos] || 0, mocked.length + 30));
+    // NFL mocks know nothing of TE premium: their overall half moves tight ends up (the curve half already has it)
+    mocked.forEach((p, i) => mockSlots.set(p, curveSlot(p.pos, (k[p.pos] = (k[p.pos] || 0) + 1) - 1, (i + 1) * teAdj(p))));
+    for (const p of list) if (!p.draft && !p.mock) mockSlots.set(p, curveSlot(p.pos, k[p.pos] || 0, (mocked.length + 30) * teAdj(p)));
   }
-  // boards you pasted (Footballguys, Draft Sharks, Reddit…): average of their ranks for the player
+  // boards you pasted (KeepTradeCut, Draft Sharks, Dynasty Nerds, Reddit…): their ranks for the player, adjusted to
+  // your format when a board was made for another one (which then counts half). A board that doesn't say is taken as
+  // made without TE premium, like most published rankings, and doesn't touch QBs.
+  const yourFmt = sf ? '2' : '1', tepOn = tePts > 0;
+  const boardAdj = (b, p) => {
+    let a = 1;
+    if (p.pos === 'QB' && b.qb === '1' && sf) a = 0.5;
+    if (p.pos === 'QB' && b.qb === '2' && !sf) a = 2;
+    if (p.pos === 'TE') a *= b.tep ? teMul(p) / teFactor(0.75, teOrder?.get(p) ?? TE_K.length) : teMul(p); // TE-premium boards: taken as made for +0.75
+    return a;
+  };
+  const boardW = b => ((b.qb && b.qb !== yourFmt) || !!b.tep !== tepOn ? 0.5 : 1);
+  // one board for your format counts as much as the online mock consensus; two count 1.5×, three or more twice as much.
+  // A board you mark as your base counts three times as much as your other boards, and your boards then count about as
+  // much as every other signal together: the order starts from it, and the rest still move players up or down.
+  const based = boards.some(b => b.base);
+  const boardsWeight = based ? 3.5 : 1.6 * Math.min(2, 0.5 + 0.5 * boards.reduce((t, b) => t + boardW(b), 0));
   const yours = p => {
-    const r = boards.map(b => (b.blendRank || b.rank)(p)).filter(v => v != null);
-    return r.length ? r.reduce((a, b) => a + b, 0) / r.length : null;
+    let n = 0, d = 0;
+    for (const b of boards) {
+      const r = (b.blendRank || b.rank)(p);
+      if (r == null) continue;
+      const w = boardW(b) * (b.base ? 3 : 1);
+      n += Math.log(Math.max(1, r * boardAdj(b, p))) * w; d += w;
+    }
+    return d ? Math.exp(n / d) : null;
   };
   // community: what people outside this app say (for the mocks, only the players they actually list)
   const all = () => true;
   const signals = [
-    { label: `your pasted board${boards.length === 1 ? '' : 's'} (${boards.map(b => b.name).join(', ')})`, w: 1.6, m: rankBy(yours, true), community: all },
+    { label: `your pasted board${boards.length === 1 ? '' : 's'} (${boards.map(b => (fmtName(b.qb, b.tep, b.base) ? `${b.name}: ${fmtName(b.qb, b.tep, b.base)}` : b.name)).join(', ')})`, w: boardsWeight, m: rankBy(yours, true), community: all },
     { label: 'online NFL mock-draft consensus (Pro Football Network)', w: 1.6, m: mockSlots, community: p => !!p.mock },
-    { label: 'rookie ADP', w: 0.4, m: rankBy(p => p.adp?.rookie ?? null, true), community: all },
+    { label: 'rookie ADP', w: 0.4, m: rankBy(p => p.adp?.rookie ?? null, true), adj: teAdj, community: all },
     { label: 'market value', w: 0.3, m: rankBy(market, false), community: all },
-    // FantasyPros rookie rankings are 1QB without TE premium; move QBs up in superflex, TEs with TE premium
+    // FantasyPros rookie rankings are 1QB without TE premium: QBs move up in superflex, TEs with TE premium
     { label: 'expert rankings', w: 0.25, m: rankBy(p => p.ecr?.rank ?? null, true), adj: fmtAdj, community: all },
     // before FantasyPros ranks a class: a model of how its experts ranked past classes from the same profile
     // (pedigree, production, age, school, size, Wikipedia attention), placed on the market's positional curve
     { label: 'expert-style projection (on the market’s positional curve)', w: 0.35, m: onCurve(p => (p.ecr ? null : p.xecr ?? null), fmtAdj) },
     // before the NFL Draft: where the draft-capital model projects him in the real draft (players it projects as
     // undrafted come after everyone it projects to be picked)
-    { label: 'projected NFL draft position', w: 0.3, m: rankBy(p => (p.draft || !p.proj ? null : p.proj.pick ?? 300 + p.proj.rank), true) },
+    { label: 'projected NFL draft position', w: 0.3, m: rankBy(p => (p.draft || !p.proj ? null : p.proj.pick ?? 300 + p.proj.rank), true), adj: teAdj },
     { label: Object.keys(curves).length ? 'Prospect Score (on the market’s positional curve)' : 'Prospect Score', w: 0.15, m: scoreSlot },
   ];
   const slotOf = (s, p) => { const r = s.m.get(p); return r == null ? null : Math.max(1, r * (s.adj ? s.adj(p) : 1)); };

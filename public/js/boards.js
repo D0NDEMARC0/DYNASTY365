@@ -1,5 +1,6 @@
-// Your own boards: paste a ranking from any site you read (Footballguys, Draft Sharks, KeepTradeCut, a r/DynastyFF
-// post…). It's matched to the class by name and saved only in this browser — nothing is uploaded or published.
+// Your own boards: paste a ranking from any site you read (KeepTradeCut, Draft Sharks, Dynasty Nerds, Dynasty League
+// Football, Footballguys, a r/DynastyFF post…), and say which format it's for (qb: '1' | '2' | '' for any, tep: true
+// for TE premium). It's matched to the class by name and saved only in this browser — nothing is uploaded or published.
 const KEY = 'dl.boards.v1';
 const mem = {}; // fallback when the browser blocks storage (private mode): lasts until the page is closed
 
@@ -56,16 +57,23 @@ export function userBoards(cls, list) {
   });
 }
 
-export function addBoard(cls, name, text, list) {
+export function addBoard(cls, name, text, list, { qb = '', tep = false, base = false } = {}) {
   const res = parseBoard(text, list);
   if (!res.matched) return { error: `No ${cls} prospects found in that text. Paste one player per line, e.g. “1. Jeremiah Smith WR Ohio State”.` };
   const all = read();
   const count = (all[cls]?.length || 0) + (mem[cls]?.length || 0);
-  const b = { id: Date.now().toString(36), name: String(name || '').trim().slice(0, 32) || `Board ${count + 1}`, date: new Date().toISOString().slice(0, 10), text: String(text).slice(0, 60000) };
+  const b = { id: Date.now().toString(36), name: String(name || '').trim().slice(0, 32) || `Board ${count + 1}`, date: new Date().toISOString().slice(0, 10), text: String(text).slice(0, 60000), qb: ['1', '2'].includes(qb) ? qb : '', tep: !!tep, base: !!base };
   (all[cls] ||= []).push(b);
   if (write(all)) return { board: b, res };
   (mem[cls] ||= []).push(b);
   return { board: b, res, warning: 'This browser blocks saving, so the board lasts only until you close the page.' };
+}
+
+/** Change a saved board's format. */
+export function updateBoard(cls, id, patch) {
+  const all = read();
+  for (const b of [...(all[cls] || []), ...(mem[cls] || [])]) if (b.id === id) Object.assign(b, patch);
+  write(all);
 }
 
 export function removeBoard(cls, id) {

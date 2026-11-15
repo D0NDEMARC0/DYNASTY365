@@ -361,3 +361,4 @@ h3.bxh { margin: 18px 0 8px; }
 .sgrid label { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; }
 .sgrid input { width: 72px; flex: none; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); text-align: right; font-variant-numeric: tabular-nums; }
 .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.boards .bfmt { font-size: 11px; padding: 1px 4px; border-radius: 6px; }
