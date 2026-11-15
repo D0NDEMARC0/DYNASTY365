@@ -1,5 +1,5 @@
 // Rookie & prospect classes: big board (plus boards you paste), Prospect Score, consensus rankings, ADP and mock drafts.
-import { S, rows } from '../store.js';
+import { S, rows, tePremium } from '../store.js';
 import { loadProspects, loadPahowdy, collegeHeadshot, stars, mockText } from '../college.js';
 import { consensus, genericSlots, leagueSlots, runMock } from '../mock.js';
 import { userBoards, addBoard, removeBoard } from '../boards.js';
@@ -48,6 +48,8 @@ export async function render(root, params, query) {
   const pre = status !== 'drafted';
   st.view = VIEWS.includes(query.view) ? query.view : pre ? 'board' : 'rankings';
   const sf = S.settings.qb === 2;
+  const tep = tePremium();
+  const fmtName = `${sf ? 'superflex' : '1QB'}${tep ? `, TE premium +${tep}` : ''}`;
   const teams = S.settings.teams || 12;
   const classList = data.prospects.filter(p => p.draftClass === st.cls);
   const boards = userBoards(st.cls, classList);
@@ -66,7 +68,7 @@ export async function render(root, params, query) {
   const note = () => {
     const basis = `<b>Order</b> blends ${used.join(', ')}.`;
     if (status === 'watch') {
-      return `<b>${st.cls} big board.</b> Every FBS QB, RB, WR and TE who can enter the ${st.cls} draft (three years out of high school: true juniors, redshirt sophomores, and players who returned to school), ranked for ${sf ? 'superflex' : '1QB'}. ${basis} `
+      return `<b>${st.cls} big board.</b> Every FBS QB, RB, WR and TE who can enter the ${st.cls} draft (three years out of high school: true juniors, redshirt sophomores, and players who returned to school), ranked for ${fmtName}. ${basis} `
         + (mc ? `<b>Mocks</b> = where the online NFL mocks have him (<a class="link" href="${esc(mc.url)}" target="_blank" rel="noopener">${esc(mc.source)}</a>): his pick in the first round of the latest ${mc.recentMocks || ''} mocks and how many of them have him there, or his season-long consensus rank if he isn’t a first-rounder in recent mocks. The latest mocks count three times as much as the season-long list, and they’re the biggest input to the order and to the projected NFL pick. ` : '')
         + '<b>Expert-style</b> = where FantasyPros experts would likely rank him, learned from how they ranked past classes before the draft; '
         + '<b>Buzz</b> = his Wikipedia page views vs. the class, the hype and draft buzz stats can’t see. '
@@ -74,7 +76,7 @@ export async function render(root, params, query) {
         + 'Real FantasyPros ranks and Sleeper ADP replace the projections automatically once they’re published; in March this becomes the combine class, and after the NFL Draft the drafted class.';
     }
     if (status === 'devy') {
-      return `<b>${st.cls} devy board.</b> College players first eligible for the ${st.cls} draft (${st.cls - meta.upcoming === 1 ? 'true sophomores and redshirt freshmen' : 'true freshmen'} this fall) with real production or a 4–5★ recruiting profile, ranked for ${sf ? 'superflex' : '1QB'}. ${basis} `
+      return `<b>${st.cls} devy board.</b> College players first eligible for the ${st.cls} draft (${st.cls - meta.upcoming === 1 ? 'true sophomores and redshirt freshmen' : 'true freshmen'} this fall) with real production or a 4–5★ recruiting profile, ranked for ${fmtName}. ${basis} `
         + 'Same models as the next class’s big board, with more uncertainty the further out the draft is: recruiting, early production, breakout age and Buzz carry the most weight. Paste devy rankings you trust below to blend them in.';
     }
     if (status === 'combine') return `<b>${st.cls} class — combine invitees.</b> Draft capital is added automatically after the NFL Draft. ${basis}`;
@@ -237,7 +239,7 @@ export async function render(root, params, query) {
       return bits.join(' · ');
     };
     body.innerHTML = `
-      <p class="muted small" style="margin:0 0 10px">${useLeague ? `${esc(S.league.info.name)} · ` : ''}${esc(source)} · ${sf ? 'superflex' : '1QB'} · each team takes the best available player${useLeague ? ', nudged toward its two weakest positions' : ''}.${picks.some(x => x.me) ? ' Your picks are highlighted.' : ''}</p>
+      <p class="muted small" style="margin:0 0 10px">${useLeague ? `${esc(S.league.info.name)} · ` : ''}${esc(source)} · ${fmtName} · each team takes the best available player${useLeague ? ', nudged toward its two weakest positions' : ''}.${picks.some(x => x.me) ? ' Your picks are highlighted.' : ''}</p>
       <div class="grid2">${rounds.map(r => `
         <div class="card"><h2>Round ${r}</h2><div class="lineup">${picks.filter(x => x.round === r).map(x => `
           <div class="slot mockpick${x.me ? ' mine' : ''}">

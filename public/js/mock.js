@@ -1,5 +1,5 @@
 // Rookie consensus board + mock draft engine (generic league or your Sleeper league).
-import { S, sleeper } from './store.js';
+import { S, sleeper, tepTier } from './store.js';
 import { buildTeams } from './views/league.js';
 
 const market = p => (p.sid ? S.rowById.get(p.sid)?.market || null : null);
@@ -36,14 +36,19 @@ function positionalCurves(history) {
  * re-normalized to whatever exists for each player. For a player the community has ranked, the models can move him
  * at most 3× either way from that ranking. Position-neutral signals are mapped onto the market's positional curve:
  * the 2nd-best RB by score takes about the slot where 2nd RBs usually go in this format.
+ * TE premium (FantasyCalc's tier: te+ or te++) works the same way: the curve comes from TE-premium market values, and
+ * the expert rankings, which are made without it, move tight ends up.
  */
-export function consensus(list, { sf, history = [], boards = [] }) {
+export function consensus(list, { sf, tep = tepTier(), history = [], boards = [] }) {
   const rankBy = (get, asc) => {
     const have = list.filter(p => get(p) != null).sort((a, b) => (asc ? get(a) - get(b) : get(b) - get(a)));
     return new Map(have.map((p, i) => [p, i + 1]));
   };
   const curves = positionalCurves(history);
-  const qbAdj = p => (sf && p.pos === 'QB' ? 0.5 : 1); // 1QB-based ranks: QBs move up in superflex
+  // 1QB, no-TE-premium ranks: QBs move up in superflex. With TE premium, past classes' tight ends went about 10%
+  // earlier (te+) or 18% earlier (te++) on FantasyCalc's TE-premium values, so tight ends move up as much.
+  const teMul = { 'te+': 0.9, 'te++': 0.82 }[tep] || 1;
+  const fmtAdj = p => (sf && p.pos === 'QB' ? 0.5 : p.pos === 'TE' ? teMul : 1);
   // Half "where the i-th QB/RB/WR/TE of a class usually goes in this format", half the overall rank, so a weak RB1
   // doesn't jump the class.
   const curveSlot = (pos, i, overall) => {
@@ -86,11 +91,11 @@ export function consensus(list, { sf, history = [], boards = [] }) {
     { label: 'online NFL mock-draft consensus (Pro Football Network)', w: 1.6, m: mockSlots, community: p => !!p.mock },
     { label: 'rookie ADP', w: 0.4, m: rankBy(p => p.adp?.rookie ?? null, true), community: all },
     { label: 'market value', w: 0.3, m: rankBy(market, false), community: all },
-    // FantasyPros rookie rankings are 1QB; move QBs up in superflex
-    { label: 'expert rankings', w: 0.25, m: rankBy(p => p.ecr?.rank ?? null, true), adj: qbAdj, community: all },
+    // FantasyPros rookie rankings are 1QB without TE premium; move QBs up in superflex, TEs with TE premium
+    { label: 'expert rankings', w: 0.25, m: rankBy(p => p.ecr?.rank ?? null, true), adj: fmtAdj, community: all },
     // before FantasyPros ranks a class: a model of how its experts ranked past classes from the same profile
     // (pedigree, production, age, school, size, Wikipedia attention), placed on the market's positional curve
-    { label: 'expert-style projection (on the market’s positional curve)', w: 0.35, m: onCurve(p => (p.ecr ? null : p.xecr ?? null), qbAdj) },
+    { label: 'expert-style projection (on the market’s positional curve)', w: 0.35, m: onCurve(p => (p.ecr ? null : p.xecr ?? null), fmtAdj) },
     // before the NFL Draft: where the draft-capital model projects him in the real draft (players it projects as
     // undrafted come after everyone it projects to be picked)
     { label: 'projected NFL draft position', w: 0.3, m: rankBy(p => (p.draft || !p.proj ? null : p.proj.pick ?? 300 + p.proj.rank), true) },
