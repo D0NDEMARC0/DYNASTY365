@@ -231,7 +231,7 @@ export async function render(root, params, query) {
     if (!g) return `vs ${esc(r.opp || '?')}`;
     const home = g.vs || r.team === g.home;
     const score = g.hs != null ? ` · ${home ? g.hs : g.as}–${home ? g.as : g.hs}` : '';
-    const status = g.state === 'live' ? `<span class="lv" title="In progress"><i></i></span>` : g.state === 'final' ? '<span class="muted">Final</span>' : '';
+    const status = g.state === 'live' ? liveTag : g.state === 'final' ? '<span class="muted">Final</span>' : '';
     return `${home ? 'vs' : '@'} ${esc(r.opp)}${score} ${status}`;
   };
   const ptsCell = r => {
@@ -266,6 +266,8 @@ export async function render(root, params, query) {
         { key: 'board', label: 'Board', n: true, title: 'Rank on the prospect board (Prospects tab) and draft class', sort: r => (r.board ? r.board.cls * 10000 + r.board.rank : null), cell: r => `<td class="n">${r.board ? `#${r.board.rank} <span class="muted">’${String(r.board.cls).slice(2)}</span>` : '<span class="muted">—</span>'}</td>` },
       ]),
     ];
+    // a column only one sport has (Dynasty, Board) falls back to points after switching sports
+    if (!cols.some(c => c.key === st.sort && c.sort)) { st.sort = 'pts'; st.dir = 'desc'; }
     const list = sortRows(visible(), cols, st.sort, st.dir);
     $('[data-table]').innerHTML = table({
       cols, rows: list.slice(0, st.limit), sort: st.sort, dir: st.dir, cls: 'pin live-table',
