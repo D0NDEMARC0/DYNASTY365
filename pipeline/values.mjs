@@ -12,11 +12,15 @@ const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data'
 export const STATIC_TEAMS = [8, 10, 12, 14, 16];
 export const STATIC_PPR = [0, 0.5, 1];
 export const STATIC_QB = [1, 2];
+// FantasyCalc's TE-premium tiers: none (0.25 or less per TE catch), te+ (0.5 to 1.0), te++ (over 1.0, or 2 TE starters).
+// Only tight ends' values change between them. File suffix used for the static website's value files:
+export const TEP_TIERS = { none: '', 'te+': '_tep1', 'te++': '_tep2' };
 
-export async function marketValues({ qb, ppr, teams }) {
+export async function marketValues({ qb, ppr, teams, tep = 'none' }) {
+  if (!(tep in TEP_TIERS)) tep = 'none';
   const fc = await cachedJSON(
-    `https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=${qb}&numTeams=${teams}&ppr=${ppr}`,
-    `fc_${qb}qb_${teams}_${ppr}.json`, 6);
+    `https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=${qb}&numTeams=${teams}&ppr=${ppr}${tep === 'none' ? '' : `&tep=${encodeURIComponent(tep)}`}`,
+    `fc_${qb}qb_${teams}_${ppr}${TEP_TIERS[tep]}.json`, 6);
   const players = {}, picks = {};
   for (const r of fc || []) {
     if (r.player.position === 'PICK') { picks[r.player.name] = r.value; continue; }
@@ -39,5 +43,5 @@ export async function marketValues({ qb, ppr, teams }) {
   const curve = Object.values(players).map(p => p.fc).filter(v => v != null).sort((a, b) => b - a);
   const valueAtRank = k => (k <= curve.length ? curve[k - 1] : Math.max(1, Math.round((curve[curve.length - 1] || 1) * 0.97 ** (k - curve.length))));
   for (const p of Object.values(players)) p.market = p.fc ?? (p.dpRank ? valueAtRank(p.dpRank) : 0);
-  return { players, picks, format: { qb, ppr, teams }, fetched: new Date().toISOString() };
+  return { players, picks, format: { qb, ppr, teams, tep }, fetched: new Date().toISOString() };
 }

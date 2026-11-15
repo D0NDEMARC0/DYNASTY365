@@ -94,7 +94,8 @@ const server = http.createServer(async (req, res) => {
       const qb = url.searchParams.get('qb') === '2' ? 2 : 1;
       const ppr = ['0', '0.5', '1'].includes(url.searchParams.get('ppr')) ? Number(url.searchParams.get('ppr')) : 1;
       const teams = Math.min(32, Math.max(8, Number(url.searchParams.get('teams')) || 12));
-      return send(res, 200, await marketValues({ qb, ppr, teams }));
+      const tep = url.searchParams.get('tep') || 'none';
+      return send(res, 200, await marketValues({ qb, ppr, teams, tep }));
     }
     if (url.pathname === '/api/rebuild' && req.method === 'POST') { rebuild('manual'); return send(res, 202, status()); }
     if (url.pathname === '/api/status') return send(res, 200, status());

@@ -68,7 +68,7 @@ function controls() {
     ${(() => {
       const tp = tePremium(), locked = sc === 'league' && L;
       const opts = [...new Set([0, 0.5, 0.75, 1, tp])].sort((a, b) => a - b);
-      return `<select data-k="tep" aria-label="TE premium" title="${locked ? 'TE premium: set by your league' : 'TE premium: extra points per catch by a tight end'}" ${locked ? 'disabled' : ''}>${opts.map(v => `<option value="${v}" ${v === tp ? 'selected' : ''}>${v ? `TE +${v}` : 'No TE premium'}</option>`).join('')}</select>`;
+      return `<select data-k="tep" aria-label="TE premium" title="${locked ? 'TE premium: set by your league' : 'TE premium: extra points per catch by a tight end. Also switches market values to FantasyCalc’s TE-premium values'}" ${locked ? 'disabled' : ''}>${opts.map(v => `<option value="${v}" ${v === tp ? 'selected' : ''}>${v ? `TE +${v}` : 'No TE premium'}</option>`).join('')}</select>`;
     })()}
     <select data-k="teams" aria-label="League size" ${L ? 'disabled' : ''}>${sizes.map(n => `<option value="${n}" ${S.settings.teams === n ? 'selected' : ''}>${n} teams</option>`).join('')}</select>
     <button class="icon-btn" data-k="theme" title="Theme: ${S.settings.theme}" aria-label="Toggle theme">${{ auto: '◐', light: '☀', dark: '☾' }[S.settings.theme]}</button>`;

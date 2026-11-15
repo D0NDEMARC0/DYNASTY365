@@ -47,6 +47,15 @@ export function tePremium() {
   if (sc === 'custom' && S.settings.custom) return S.settings.custom.bonus_rec_te || 0;
   return S.settings.tep || 0;
 }
+/**
+ * FantasyCalc's TE-premium tier for market values, by its own rule: te++ for more than 1.0 per TE catch or a league
+ * that starts 2 TEs, te+ for 0.5 to 1.0, none below that.
+ */
+export function tepTier() {
+  const v = tePremium();
+  const twoTE = (S.league?.slots || []).filter(s => s === 'TE').length >= 2;
+  return twoTE || v > 1 ? 'te++' : v >= 0.5 ? 'te+' : 'none';
+}
 // a season's catches (older data may only have the points)
 const catches = s => s.box?.rec ?? Math.max(0, (s.fp?.ppr ?? 0) - (s.fp?.std ?? 0));
 /** League or custom scoring (scored stat by stat), or null for a preset (whose season points are precomputed). */
@@ -87,9 +96,11 @@ export async function loadValues() {
     const sizes = S.site?.teams || [12];
     teams = sizes.reduce((best, t) => (Math.abs(t - teams) < Math.abs(best - teams) ? t : best), sizes[0]);
   }
-  const key = `${qb}|${ppr}|${teams}`;
+  const tep = tepTier();
+  const key = `${qb}|${ppr}|${teams}|${tep}`;
   if (S.valuesKey === key && S.values) return;
-  const r = await fetchData(S.mode === 'static' ? `data/values/${qb}_${ppr}_${teams}.json` : `api/values?qb=${qb}&ppr=${ppr}&teams=${teams}`);
+  const suffix = { none: '', 'te+': '_tep1', 'te++': '_tep2' }[tep];
+  const r = await fetchData(S.mode === 'static' ? `data/values/${qb}_${ppr}_${teams}${suffix}.json` : `api/values?qb=${qb}&ppr=${ppr}&teams=${teams}&tep=${encodeURIComponent(tep)}`);
   if (!r.ok) throw new Error('Could not load market values');
   S.values = await r.json();
   S.valuesKey = key;

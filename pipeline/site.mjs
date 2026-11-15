@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { marketValues, STATIC_QB, STATIC_PPR, STATIC_TEAMS } from './values.mjs';
+import { marketValues, STATIC_QB, STATIC_PPR, STATIC_TEAMS, TEP_TIERS } from './values.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'data', 'out');
@@ -54,9 +54,9 @@ if (fs.existsSync(path.join(OUT, 'college'))) fs.cpSync(path.join(OUT, 'college'
 
 // Pre-built market values for every format the app offers.
 let n = 0;
-for (const qb of STATIC_QB) for (const ppr of STATIC_PPR) for (const teams of STATIC_TEAMS) {
-  const v = await marketValues({ qb, ppr, teams });
-  fs.writeFileSync(path.join(SITE, 'data', 'values', `${qb}_${ppr}_${teams}.json`), JSON.stringify(v));
+for (const qb of STATIC_QB) for (const ppr of STATIC_PPR) for (const teams of STATIC_TEAMS) for (const [tep, suffix] of Object.entries(TEP_TIERS)) {
+  const v = await marketValues({ qb, ppr, teams, tep });
+  fs.writeFileSync(path.join(SITE, 'data', 'values', `${qb}_${ppr}_${teams}${suffix}.json`), JSON.stringify(v));
   n++;
   await new Promise(r => setTimeout(r, 250)); // be polite to the FantasyCalc API
 }
