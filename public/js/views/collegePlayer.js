@@ -150,9 +150,9 @@ function breakoutText(bk, pos) {
 
 function careerTable(pos, career) {
   const keys = {
-    WR: ['g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'yprr', 'yptpa', 'epat', 'rec20r'],
-    TE: ['g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'yprr', 'yptpa', 'epat', 'rec20r'],
-    RB: ['g', 'car', 'ruyd', 'rutd', 'ypc', 'exp10', 'stuff', 'brk', 'rec', 'reyd', 'scsh', 'rdom', 'epar'],
+    WR: ['g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'routes', 'yprr', 'yptpa', 'epat', 'rec20r'],
+    TE: ['g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'routes', 'yprr', 'yptpa', 'epat', 'rec20r'],
+    RB: ['g', 'car', 'ruyd', 'rutd', 'ypc', 'exp10', 'stuff', 'brk', 'rec', 'reyd', 'routes', 'scsh', 'rdom', 'epar'],
     QB: ['g', 'pa', 'pyd', 'ptd', 'int', 'ypa', 'epap', 'cpoe', 'qcar', 'qruyd', 'qypc', 'rutd'],
   }[pos] || [];
   const cols = [

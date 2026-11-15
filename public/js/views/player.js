@@ -90,14 +90,14 @@ export async function render(root, params, query) {
     const pts = weekPoints(p, g);
     return {
       label: String(g[0]), v: pts,
-      tip: tipRows(`Week ${g[0]} vs ${g[1]}`, [['Points', pts.toFixed(1)], ['Pos rank', g[17] ? `${p.pos}${g[17]}` : '—'], ['Snap share', g[16] != null ? fmtPct(g[16]) : '—'], ...lineFor(p.pos, g)]),
+      tip: tipRows(`Week ${g[0]} vs ${g[1]}`, [['Points', pts.toFixed(1)], ['Pos rank', g[17] ? `${p.pos}${g[17]}` : '—'], ['Snap share', g[16] != null ? fmtPct(g[16]) : '—'], ...(g[18] != null && p.pos !== 'QB' ? [['Routes', `${s?.routesEst ? '~' : ''}${g[18]}`]] : []), ...lineFor(p.pos, g)]),
     };
   });
   const wk = el.querySelector('[data-weekly]');
   if (wk) wk.innerHTML = columns({ data, avg, avgLabel: 'Avg', w: Math.max(300, wk.clientWidth), h: 250, yFmt: x => x.toFixed(x % 1 && Math.abs(x) < 10 ? 1 : 0) })
     + `<div class="muted small">${scoringLabel()}${['league', 'custom'].includes(S.settings.scoring) ? ' (weekly bars exclude fumbles, 2-pt and first-down bonuses)' : ''} · line = season average · hover a week for details</div>`;
   const lg = el.querySelector('[data-log]');
-  if (lg) lg.innerHTML = gameLog(p, games);
+  if (lg) lg.innerHTML = gameLog(p, games, !!s?.routesEst);
 }
 
 /** Pahowdy's Prospect Database card — only in the copy of the app on your computer (personal-use data). */
@@ -241,7 +241,7 @@ function history(p, years) {
     WR: [['Tgt', y => b(y).tgt], ['Rec', y => b(y).rec], ['Yds', y => fmtInt(b(y).reyd)], ['TD', y => b(y).retd]],
     TE: [['Tgt', y => b(y).tgt], ['Rec', y => b(y).rec], ['Yds', y => fmtInt(b(y).reyd)], ['TD', y => b(y).retd]],
   }[pos] || [];
-  const adv = { QB: ['epadb', 'cpoe', 'padot', 'skr', 'twp'], RB: ['ypc', 'exp10', 'ryoe', 'yaco', 'osh', 'tsh', 'yprr'], WR: ['routes', 'yprr', 'tprr', 'tsh', 'aysh', 'adot', 'sep', 'yacoe'], TE: ['routes', 'yprr', 'tprr', 'tsh', 'rp', 'adot', 'sep'] }[pos] || [];
+  const adv = { QB: ['snap', 'epadb', 'cpoe', 'padot', 'skr', 'twp'], RB: ['snap', 'routes', 'rp', 'ypc', 'exp10', 'ryoe', 'yaco', 'osh', 'tsh', 'yprr'], WR: ['snap', 'routes', 'rp', 'yprr', 'tprr', 'tsh', 'aysh', 'adot', 'sep', 'yacoe'], TE: ['snap', 'routes', 'rp', 'yprr', 'tprr', 'tsh', 'adot', 'sep'] }[pos] || [];
   const cols = [
     ...base,
     ...extra.map(([label, fn], i) => ({ key: `e${i}`, label, n: true, cell: y => n(fn(y)) })),
@@ -251,7 +251,7 @@ function history(p, years) {
   return table({ cols, rows: years });
 }
 
-function gameLog(p, games) {
+function gameLog(p, games, est = false) {
   if (!games.length) return '<div class="empty">No games.</div>';
   const n = v => `<td class="n">${v ?? '—'}</td>`;
   const cols = [
@@ -259,7 +259,8 @@ function gameLog(p, games) {
     { key: 'o', label: 'Opp', cell: g => `<td>${esc(g[1])}</td>` },
     { key: 'pts', label: 'Pts', n: true, cell: g => n(weekPoints(p, g).toFixed(1)) },
     { key: 'rk', label: 'Pos rk', n: true, cell: g => n(g[17] ? `${p.pos}${g[17]}` : '—') },
-    { key: 'sn', label: 'Snap %', n: true, cell: g => n(g[16] != null ? fmtPct(g[16]) : '—') },
+    { key: 'sn', label: 'Snap %', n: true, title: 'Share of his team’s offensive snaps (Pro Football Reference)', cell: g => n(g[16] != null ? fmtPct(g[16]) : '—') },
+    ...(p.pos !== 'QB' && games.some(g => g[18] != null) ? [{ key: 'rt', label: 'Routes', n: true, title: 'Routes run: his on-field dropbacks (nflverse participation) × his position’s route rate; for the season in progress, estimated from snap share × team dropbacks (marked ~)', cell: g => n(g[18] != null ? `${est ? '~' : ''}${g[18]}` : '—') }] : []),
   ];
   const stat = (label, i) => ({ key: label, label, n: true, cell: g => n(g[i]) });
   if (p.pos === 'QB') cols.push({ key: 'ca', label: 'Cmp/Att', n: true, cell: g => n(`${g[11]}/${g[12]}`) }, stat('Pass yds', 13), stat('TD', 14), stat('INT', 15), stat('Car', 8), stat('Rush yds', 9), stat('Rush TD', 10));

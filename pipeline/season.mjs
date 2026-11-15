@@ -22,7 +22,7 @@ function blank() {
     db: 0, att: 0, cmp: 0, passYds: 0, passTd: 0, int: 0, sacks: 0, qbEpa: 0, cpoeSum: 0, cpoeN: 0, passAy: 0, deepAtt: 0,
     pressured: 0, pressN: 0, intWorthy: 0, pa: 0, oop: 0, ftnDb: 0,
     // usage
-    passSnaps: 0, passSnapsEst: false, snapPctSum: 0, snapGames: 0, offSnaps: 0,
+    passSnaps: 0, passSnapsEst: false, snapPctSum: 0, snapGames: 0, offSnaps: 0, dbG: {}, sk: 1,
     teamDb: 0, teamTgt: 0, teamAy: 0, teamCar: 0, teamDbSnapW: 0,
     // vs man / zone coverage (participation coverage tags, 2023+)
     dbMan: 0, dbZone: 0, tgtMan: 0, tgtZone: 0, ydsMan: 0, ydsZone: 0,
@@ -81,6 +81,7 @@ export function buildSeason({ season, plays, part, ftn, snaps, weekly, pfr2gsis,
       if (pr) {
         for (const id of pr.off) {
           const o = get(id); o.passSnaps++; o.games.add(p.game_id); o.gt[p.game_id] = p.posteam;
+          o.dbG[p.game_id] = (o.dbG[p.game_id] || 0) + 1; // on-field dropbacks by game, for weekly routes
           if (pr.cov === 'M') o.dbMan++; else if (pr.cov === 'Z') o.dbZone++;
           for (const k of tags) add(o.sp, k, 0);
         }
@@ -243,6 +244,7 @@ export function buildSeason({ season, plays, part, ftn, snaps, weekly, pfr2gsis,
     const k = 150;
     const sk = prior ? (prior.n * prior.s + k * posMean) / (prior.n + k) : posMean;
     estPassSnaps = Math.min(dbSnapW * sk, o.teamDb);
+    o.sk = sk;
     if (!part) { o.passSnaps = estPassSnaps; o.passSnapsEst = true; }
     else if (priorSkew && dbSnapW > 100 && ['WR', 'TE', 'RB'].includes(pos)) {
       diagN++; diagAbs += Math.abs(estPassSnaps - o.passSnaps); diagActual += o.passSnaps;
@@ -250,6 +252,16 @@ export function buildSeason({ season, plays, part, ftn, snaps, weekly, pfr2gsis,
   }
   const posSkew = {};
   for (const [pos, v] of Object.entries(posSkewAcc)) posSkew[pos] = v.b > 0 ? v.a / v.b : 1;
+
+  // Routes run in one game: his on-field dropbacks (participation data) × his position's route rate; for the season in
+  // progress, snap share × his team's dropbacks that game × his pass-down skew, like the season total.
+  const weekRoutes = (o, pos, g, sn) => {
+    const rr = ROUTE_RATE[pos] ?? 0;
+    if (!rr) return null;
+    if (part) return o.dbG[g] ? Math.round(o.dbG[g] * rr) : 0;
+    const team = o.gt[g], T = team ? TG.get(`${g}|${team}`) : null;
+    return sn && T ? Math.round(Math.min(sn.pct * o.sk, 1) * T.db * rr) : null;
+  };
 
   // ---------- assemble outputs ----------
   const out = new Map();
@@ -364,7 +376,7 @@ export function buildSeason({ season, plays, part, ftn, snaps, weekly, pfr2gsis,
       return [w.week, w.opponent_team, r(w.fantasy_points ?? 0, 1), r(w.fantasy_points_ppr ?? 0, 1), w.receptions ?? 0, w.targets ?? 0,
         w.receiving_yards ?? 0, w.receiving_tds ?? 0, w.carries ?? 0, w.rushing_yards ?? 0, w.rushing_tds ?? 0,
         w.completions ?? 0, w.attempts ?? 0, w.passing_yards ?? 0, w.passing_tds ?? 0, w.passing_interceptions ?? 0,
-        sn ? r(sn.pct, 2) : null, w._rk_ppr ?? null];
+        sn ? r(sn.pct, 2) : null, w._rk_ppr ?? null, weekRoutes(o, pos, w.game_id, sn)];
     }));
   }
 

@@ -73,9 +73,9 @@ export const CM = {
 for (const m of Object.values(CM)) m.src = SRC;
 
 export const C_COLUMNS = {
-  WR: ['elig', 'g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'bkAge', 'yprr', 'tprr', 'yptpa', 'ypt', 'catch', 'epat', 'rsr', 'rec20r', 'deep', 'adot', 'yacr', 'fdt', 'rztd'],
-  TE: ['elig', 'g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'bkAge', 'yprr', 'tprr', 'yptpa', 'ypt', 'catch', 'epat', 'rsr', 'rec20r', 'deep', 'adot', 'yacr', 'fdt', 'rztd'],
-  RB: ['elig', 'g', 'car', 'ruyd', 'rutd', 'ypc', 'exp10', 'exp15', 'stuff', 'brk', 'lypc', 'epar', 'rusr', 'csh', 'scsh', 'rdom', 'bkAge', 'tsh', 'rec', 'reyd', 'yprr', 'scpg', 'rztd'],
+  WR: ['elig', 'g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'bkAge', 'routes', 'yprr', 'tprr', 'yptpa', 'ypt', 'catch', 'epat', 'rsr', 'rec20r', 'deep', 'adot', 'yacr', 'fdt', 'rztd'],
+  TE: ['elig', 'g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'bkAge', 'routes', 'yprr', 'tprr', 'yptpa', 'ypt', 'catch', 'epat', 'rsr', 'rec20r', 'deep', 'adot', 'yacr', 'fdt', 'rztd'],
+  RB: ['elig', 'g', 'car', 'ruyd', 'rutd', 'ypc', 'exp10', 'exp15', 'stuff', 'brk', 'lypc', 'epar', 'rusr', 'csh', 'scsh', 'rdom', 'bkAge', 'tsh', 'rec', 'reyd', 'routes', 'yprr', 'scpg', 'rztd'],
   QB: ['elig', 'g', 'pa', 'pyd', 'ptd', 'int', 'ypa', 'epap', 'cpoe', 'psr', 'skr', 'padot', 'qcar', 'qruyd', 'qypc', 'rutd', 'rypg'],
 };
 // not stats: never offered as chart axes

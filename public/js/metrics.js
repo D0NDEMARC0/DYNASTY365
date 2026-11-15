@@ -125,10 +125,10 @@ export const LOWER_BETTER = new Set(['drop', 'stuff', 'skr', 'twp', 'press', 'ba
 
 // Column sets for the analytics explorer, per position. Imported columns appear only when data exists.
 export const COLUMNS = {
-  WR: ['ppg', 'xfp', 'fpoe', 'routes', 'rp', 'tsh', 'frs', 'aysh', 'wopr', 'tprr', 'yprr', 'yprrMan', 'yprrZone', 'adot', 'sep', 'cush', 'yacoe', 'catch', 'drop', 'contc', 'epat', 'fdrr', 'btr', 'rzTgt', 'x_grade', 'x_routeGrade', 'x_winRate', 'score'],
-  TE: ['ppg', 'xfp', 'fpoe', 'routes', 'rp', 'tsh', 'frs', 'aysh', 'tprr', 'yprr', 'yprrMan', 'yprrZone', 'adot', 'sep', 'yacoe', 'catch', 'drop', 'epat', 'fdrr', 'rzTgt', 'ezTgt', 'x_grade', 'x_routeGrade', 'score'],
-  RB: ['ppg', 'xfp', 'fpoe', 'csh', 'osh', 'tsh', 'hvtpg', 'ypc', 'exp10', 'exp15', 'stuff', 'succ', 'ryoe', 'ryoepct', 'yaco', 'ybco', 'btr', 'box8', 'epar', 'routes', 'yprr', 'rzCar', 'i5', 'x_grade', 'x_runGrade', 'x_elusive', 'score'],
-  QB: ['ppg', 'xfp', 'fpoe', 'db', 'epadb', 'cpoe', 'fread', 'chkr', 'padot', 'deepr', 'skr', 'twp', 'bad', 'press', 'ttt', 'aggr', 'par', 'ratt', 'rypc', 'ruypg', 'scr', 'x_grade', 'x_passGrade', 'x_btt', 'score'],
+  WR: ['ppg', 'xfp', 'fpoe', 'snap', 'routes', 'rp', 'tsh', 'frs', 'aysh', 'wopr', 'tprr', 'yprr', 'yprrMan', 'yprrZone', 'adot', 'sep', 'cush', 'yacoe', 'catch', 'drop', 'contc', 'epat', 'fdrr', 'btr', 'rzTgt', 'x_grade', 'x_routeGrade', 'x_winRate', 'score'],
+  TE: ['ppg', 'xfp', 'fpoe', 'snap', 'routes', 'rp', 'tsh', 'frs', 'aysh', 'tprr', 'yprr', 'yprrMan', 'yprrZone', 'adot', 'sep', 'yacoe', 'catch', 'drop', 'epat', 'fdrr', 'rzTgt', 'ezTgt', 'x_grade', 'x_routeGrade', 'score'],
+  RB: ['ppg', 'xfp', 'fpoe', 'snap', 'routes', 'rp', 'csh', 'osh', 'tsh', 'hvtpg', 'ypc', 'exp10', 'exp15', 'stuff', 'succ', 'ryoe', 'ryoepct', 'yaco', 'ybco', 'btr', 'box8', 'epar', 'yprr', 'rzCar', 'i5', 'x_grade', 'x_runGrade', 'x_elusive', 'score'],
+  QB: ['ppg', 'xfp', 'fpoe', 'snap', 'db', 'epadb', 'cpoe', 'fread', 'chkr', 'padot', 'deepr', 'skr', 'twp', 'bad', 'press', 'ttt', 'aggr', 'par', 'ratt', 'rypc', 'ruypg', 'scr', 'x_grade', 'x_passGrade', 'x_btt', 'score'],
 };
 
 // Percentile bars on the player page.
