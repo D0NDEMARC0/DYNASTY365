@@ -14,7 +14,9 @@ function read() {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { return {}; }
 }
 function write(all) {
-  try { localStorage.setItem(KEY, JSON.stringify(all)); return true; } catch { return false; }
+  try { localStorage.setItem(KEY, JSON.stringify(all)); } catch { return false; }
+  window.dispatchEvent(new Event('dl:changed')); // saved to your account too when you're signed in (cloud.js)
+  return true;
 }
 
 /**

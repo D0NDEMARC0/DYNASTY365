@@ -21,6 +21,7 @@ if (!S.settings.sfDefault) { S.settings.qb = 2; S.settings.sfDefault = true; }
 
 export function persist() {
   try { localStorage.setItem(LS, JSON.stringify({ settings: S.settings, sleeperUser: S.sleeperUser, sleeperUserId: S.sleeperUserId, leagueId: S.leagueId })); } catch { /* storage unavailable */ }
+  window.dispatchEvent(new Event('dl:changed')); // saved to your account too when you're signed in (cloud.js)
 }
 export const bump = () => { S.version++; };
 

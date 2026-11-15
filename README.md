@@ -66,6 +66,11 @@ open while the code or data changes reloads into the new version when you next c
   roster and live matchup score, rookies, and for college your prospect board or any draft class, linked to their
   college profiles. Player pages show a "this week" line. Data: Sleeper's free stats feed (Sportradar), read
   straight from the browser, so it works the same on the website (`public/js/live.js`).
+- **My rankings / My board** – rank NFL players (per QB format) and each prospect class yourself: drag, arrows or
+  type a rank. Mock drafts can draft from your board (`public/js/myranks.js`, `public/js/views/rankEditor.js`).
+- **Accounts** – email + password sign-in (Supabase). Settings, linked league, your rankings and pasted boards save
+  to your account and sync across devices (`public/js/cloud.js`). Setup: run `supabase/schema.sql` in your
+  Supabase project and put its URL and public (anon/publishable) key in `public/js/cloud-config.js`.
 - **Player pages** – percentile bars, weekly fantasy points, season history, game log, and college career.
 - **Prospects** – **devy boards** for the two classes after next, and a **big board** for the next draft class (every FBS QB/RB/WR/TE who's draft-eligible, tiered by
   rookie-draft round and led by the **online NFL mock drafts** (Pro Football Network's free Mock Draft Index, linked: the

@@ -13,6 +13,8 @@ import * as matchups from './views/matchups.js';
 import * as live from './views/live.js';
 import { anyLive } from './live.js';
 import { editCustomScoring } from './scoring.js';
+import * as cloud from './cloud.js';
+import { openAccount } from './views/account.js';
 
 const app = document.getElementById('app');
 const banner = document.getElementById('banner');
@@ -71,6 +73,7 @@ function controls() {
       return `<select data-k="tep" aria-label="TE premium" title="${locked ? 'TE premium: set by your league' : 'TE premium: extra points per catch by a tight end. Also switches market values to FantasyCalc’s TE-premium values'}" ${locked ? 'disabled' : ''}>${opts.map(v => `<option value="${v}" ${v === tp ? 'selected' : ''}>${v ? `TE +${v}` : 'No TE premium'}</option>`).join('')}</select>`;
     })()}
     <select data-k="teams" aria-label="League size" ${L ? 'disabled' : ''}>${sizes.map(n => `<option value="${n}" ${S.settings.teams === n ? 'selected' : ''}>${n} teams</option>`).join('')}</select>
+    ${cloud.enabled() ? accountButton() : ''}
     <button class="icon-btn" data-k="theme" title="Theme: ${S.settings.theme}" aria-label="Toggle theme">${{ auto: '◐', light: '☀', dark: '☾' }[S.settings.theme]}</button>`;
 }
 
@@ -101,6 +104,7 @@ document.getElementById('controls').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || b.disabled) return;
   if (b.dataset.k === 'theme') return onControl('theme');
+  if (b.dataset.k === 'account') return openAccount({ done: changed => { if (changed) location.reload(); else controls(); } });
   const seg = b.closest('.seg');
   if (seg) onControl(seg.dataset.k, b.dataset.v);
 });
@@ -164,10 +168,34 @@ async function waitForBuild() {
   }
 }
 
+// the account button in the header: "Sign in", or your email with a dot for saving / saved / couldn't save
+function accountButton() {
+  const u = cloud.user(), s = cloud.getStatus();
+  if (!u) return '<button class="btn acct-btn" data-k="account" title="Save your rankings, boards, league and settings to an account">Sign in</button>';
+  const dot = s.state === 'saving' ? '…' : s.state === 'error' ? ' ⚠' : ' ✓';
+  const tip = s.state === 'saving' ? 'Saving to your account…' : s.state === 'error' ? `Couldn’t save to your account: ${s.error}` : 'Saved to your account';
+  return `<button class="btn acct-btn" data-k="account" title="${esc(`${u.email} · ${tip}`)}">${esc(u.email.split('@')[0].slice(0, 14))}${dot}</button>`;
+}
+
+// accounts: take a session from an email link, then load your saved data before anything else uses it
+async function startCloud() {
+  if (!cloud.enabled()) return null;
+  let r = null;
+  try { r = await cloud.fromRedirect(); } catch { /* bad link: ignore */ }
+  if (cloud.user()) {
+    try { await Promise.race([cloud.pull(), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 6000))]); } catch { /* offline: use this browser's copy */ }
+  }
+  cloud.onStatus(() => { const b = document.querySelector('#controls [data-k="account"]'); if (b) b.outerHTML = accountButton(); });
+  cloud.start({ onRemote: () => location.reload() });
+  return r;
+}
+
 async function start() {
   applyTheme();
   initTips();
   await detectMode();
+  const redirect = await startCloud();
+  applyTheme();
   try { await loadData(); }
   catch {
     if (S.mode === 'static') { app.innerHTML = '<div class="empty">The data for this site hasn’t been published yet — check back after the next update.</div>'; return; }
@@ -186,6 +214,10 @@ async function start() {
     t = setTimeout(() => { if (Math.abs(innerWidth - lastWidth) > 60) { lastWidth = innerWidth; route(); } }, 250);
   });
   route();
+  // after an email link: confirmed account, or set a new password
+  if (redirect?.error) openAccount({ message: redirect.error });
+  else if (redirect?.type === 'recovery') openAccount({ mode: 'newpass' });
+  else if (redirect) openAccount({ message: 'Your email is confirmed and you’re signed in.' });
   watchData();
   liveDot();
   setInterval(() => { if (!document.hidden) liveDot(); }, 5 * 60e3);

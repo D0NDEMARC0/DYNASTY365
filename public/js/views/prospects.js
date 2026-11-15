@@ -2,13 +2,15 @@
 import { S, rows, tePremium } from '../store.js';
 import { loadProspects, loadPahowdy, collegeHeadshot, stars, mockText } from '../college.js';
 import { consensus, genericSlots, leagueSlots, runMock } from '../mock.js';
-import { userBoards, addBoard, removeBoard, updateBoard } from '../boards.js';
+import { userBoards, addBoard, removeBoard, updateBoard, pkey } from '../boards.js';
+import { classBoard, setClassBoard, clearClassBoard, complete } from '../myranks.js';
+import { rankEditor } from './rankEditor.js';
 import { ordinal } from '../model.js';
 import { esc, fmtInt, fmt1, heat, posTag, table, sortRows, nameMatch } from '../ui.js';
 import { mount } from './common.js';
 
-const st = { cls: null, view: null, pos: 'ALL', q: '', sort: 'mock', dir: 'asc', limit: 150, rounds: 4, mockSrc: 'league', adding: false, msg: '' };
-const VIEWS = ['board', 'rankings', 'mock'];
+const st = { cls: null, view: null, pos: 'ALL', q: '', sort: 'mock', dir: 'asc', limit: 150, rounds: 4, mockSrc: 'league', mockBoard: 'mine', adding: false, msg: '' };
+const VIEWS = ['board', 'mine', 'rankings', 'mock'];
 // other public boards, for comparison (links only — their content isn't copied into this app)
 const OTHER_BOARDS = [
   ['PFN mock draft index', cls => `https://www.profootballnetwork.com/nfl-draft-hq/mock-draft-index?year=${cls}`],
@@ -62,6 +64,10 @@ export async function render(root, params, query) {
   const history = data.prospects.filter(p => p.status === 'drafted' && p.draftClass !== st.cls);
   const { board, used } = consensus(classList, { sf, history, boards });
   const mockRank = new Map(board.map(x => [x.p, x.rank]));
+  // your own board for this class (My board): the big board's order until you change it
+  const byKey = new Map(classList.map(p => [pkey(p), p]));
+  const myOrder = () => complete(classBoard(st.cls)?.keys, board.map(x => pkey(x.p)));
+  const myBoard = () => { const o = myOrder(); return o ? o.map((k, i) => ({ p: byKey.get(k), rank: i + 1 })).filter(x => x.p) : null; };
   const drafts = meta.draftModel?.drafts || [];
   // Pahowdy's pre-draft score: only in the copy of the app on your computer (personal-use data)
   const ph = S.mode === 'server' ? await loadPahowdy() : null;
@@ -97,11 +103,12 @@ export async function render(root, params, query) {
     </div></div>
     <div class="toolbar">
       <div class="seg" data-k="cls">${classes.map(c => `<button data-v="${c}" class="${c === st.cls ? 'on' : ''}">${c}${meta.classes[c].status !== 'drafted' ? ' ★' : ''}</button>`).join('')}</div>
-      <div class="seg" data-k="view">${viewBtn('board', 'Big board')}${viewBtn('rankings', 'Rankings')}${viewBtn('mock', 'Mock draft')}</div>
+      <div class="seg" data-k="view">${viewBtn('board', 'Big board')}${viewBtn('mine', 'My board')}${viewBtn('rankings', 'Rankings')}${viewBtn('mock', 'Mock draft')}</div>
       ${st.view !== 'mock'
         ? `<div class="seg" data-k="pos">${['ALL', 'QB', 'RB', 'WR', 'TE'].map(p => `<button data-v="${p}" class="${st.pos === p ? 'on' : ''}">${p === 'ALL' ? 'All' : p}</button>`).join('')}</div>
            <input type="search" placeholder="Search player or school" value="${esc(st.q)}" data-k="q">`
         : `<div class="seg" data-k="rounds">${[3, 4, 5].map(r => `<button data-v="${r}" class="${st.rounds === r ? 'on' : ''}">${r} rounds</button>`).join('')}</div>
+           ${classBoard(st.cls) ? `<div class="seg" data-k="mockBoard" title="Which order the teams draft from"><button data-v="mine" class="${st.mockBoard === 'mine' ? 'on' : ''}">My board</button><button data-v="consensus" class="${st.mockBoard !== 'mine' ? 'on' : ''}">Big board</button></div>` : ''}
            ${S.league ? `<div class="seg" data-k="mockSrc"><button data-v="league" class="${st.mockSrc === 'league' ? 'on' : ''}">My league</button><button data-v="generic" class="${st.mockSrc === 'generic' ? 'on' : ''}">Generic ${teams}-team</button></div>` : ''}`}
     </div>
     <p class="note">${note()}</p>
@@ -240,11 +247,12 @@ export async function render(root, params, query) {
     el.querySelector('[data-more]').innerHTML = '';
     const useLeague = S.league && st.mockSrc === 'league';
     const { slots, source } = useLeague ? await leagueSlots(st.cls, st.rounds) : genericSlots(teams, st.rounds);
-    const picks = runMock(board, slots);
+    const mine = st.mockBoard === 'mine' ? myBoard() : null;
+    const picks = runMock(mine || board, slots);
     const rounds = [...new Set(picks.map(x => x.round))];
     const info = x => {
       if (!x) return '';
-      const p = x.p, bits = [`consensus #${x.rank}`];
+      const p = x.p, bits = [mine ? `your #${x.rank} · big board #${mockRank.get(p) ?? '—'}` : `consensus #${x.rank}`];
       if (p.adp?.rookie != null) bits.push(`ADP ${fmt1(p.adp.rookie)}`);
       if (p.ecr) bits.push(`experts #${fmt1(p.ecr.rank)}`);
       if (p.proj?.pick) bits.push(`proj. NFL #${p.proj.pick}`);
@@ -252,7 +260,7 @@ export async function render(root, params, query) {
       return bits.join(' · ');
     };
     body.innerHTML = `
-      <p class="muted small" style="margin:0 0 10px">${useLeague ? `${esc(S.league.info.name)} · ` : ''}${esc(source)} · ${fmtName} · each team takes the best available player${useLeague ? ', nudged toward its two weakest positions' : ''}.${picks.some(x => x.me) ? ' Your picks are highlighted.' : ''}</p>
+      <p class="muted small" style="margin:0 0 10px">${useLeague ? `${esc(S.league.info.name)} · ` : ''}${esc(source)} · ${fmtName} · ${mine ? 'drafting from your board' : 'drafting from the big board'} · each team takes the best available player${useLeague ? ', nudged toward its two weakest positions' : ''}.${picks.some(x => x.me) ? ' Your picks are highlighted.' : ''}</p>
       <div class="grid2">${rounds.map(r => `
         <div class="card"><h2>Round ${r}</h2><div class="lineup">${picks.filter(x => x.round === r).map(x => `
           <div class="slot mockpick${x.me ? ' mine' : ''}">
@@ -264,7 +272,31 @@ export async function render(root, params, query) {
       </div>`;
   };
 
-  const draw = () => (st.view === 'mock' ? drawMock() : st.view === 'board' ? drawBoard() : drawRankings());
+  // ---------- My board: your own order for the class, used by the mock drafts ----------
+  const drawMine = () => {
+    const more = el.querySelector('[data-more]');
+    const order = myOrder();
+    if (!order) {
+      body.innerHTML = `<div class="card empty"><p style="margin:0 0 12px">Make your own ${st.cls} board: start from the big board, then drag players, use the arrows or type a rank. The mock drafts can draft from it. It’s saved in this browser, and to your account when you’re signed in.</p>
+        <button class="btn primary" data-act="mine-start">Start from the big board</button></div>`;
+      more.innerHTML = '';
+      return;
+    }
+    const posN = new Map(), cnt = {};
+    for (const k of order) { const p = byKey.get(k); if (p) posN.set(k, (cnt[p.pos] = (cnt[p.pos] || 0) + 1)); }
+    const keys = order.filter(k => { const p = byKey.get(k); return p && filterQ(p); });
+    rankEditor(body, {
+      order, keys: keys.slice(0, st.limit),
+      who: k => playerCell(byKey.get(k)),
+      head: '<th>Pos rk</th><th class="n" title="Rank on the big board (consensus)">Big board</th><th class="n" title="Projected NFL draft pick">Proj. NFL</th><th class="n">Score</th>',
+      cells: k => { const p = byKey.get(k); return `<td>${posTag(p.pos)} <span class="small">${posN.get(k)}</span></td><td class="n">${mockRank.get(p) ?? '—'}</td><td class="n">${p.draft?.p ? `#${p.draft.p}` : p.proj?.pick ? `#${p.proj.pick}` : '—'}</td><td class="n heat" style="${heat(p.score)}">${p.score ?? '—'}</td>`; },
+      onChange: o => { setClassBoard(st.cls, o, tep > 0); drawMine(); },
+    });
+    more.innerHTML = `${keys.length > st.limit ? `<button class="btn" data-act="more">Show more (${keys.length - st.limit} left)</button> ` : ''}<span class="muted small">Your ${st.cls} board · ${order.length} players · players added to the class later join at the end · the Mock draft tab drafts from it</span>
+      <button class="linkbtn" data-act="mine-reset">Start over from the big board</button><button class="linkbtn" data-act="mine-clear">Delete my board</button>`;
+  };
+
+  const draw = () => (st.view === 'mock' ? drawMock() : st.view === 'board' ? drawBoard() : st.view === 'mine' ? drawMine() : drawRankings());
   draw();
 
   el.addEventListener('click', e => {
@@ -274,6 +306,11 @@ export async function render(root, params, query) {
     if (act) {
       const a = act.dataset.act;
       if (a === 'more') { st.limit += 150; draw(); return; }
+      if (a === 'mine-start' || a === 'mine-reset') {
+        if (a === 'mine-reset' && !confirm('Replace your board with the big board’s order?')) return;
+        setClassBoard(st.cls, board.map(x => pkey(x.p)), tep > 0); st.mockBoard = 'mine'; draw(); return;
+      }
+      if (a === 'mine-clear') { if (confirm(`Delete your ${st.cls} board?`)) { clearClassBoard(st.cls); draw(); } return; }
       if (a === 'addboard') { st.adding = true; st.msg = ''; draw(); el.querySelector('[data-k="btext"]')?.focus(); return; }
       if (a === 'cancelboard') { st.adding = false; st.msg = ''; draw(); return; }
       if (a === 'saveboard') {
