@@ -10,6 +10,8 @@ import * as prospects from './views/prospects.js';
 import * as college from './views/college.js';
 import * as collegePlayer from './views/collegePlayer.js';
 import * as matchups from './views/matchups.js';
+import * as live from './views/live.js';
+import { anyLive } from './live.js';
 
 const app = document.getElementById('app');
 const banner = document.getElementById('banner');
@@ -25,6 +27,7 @@ function parse() {
   if (parts[0] === 'college' && parts[1] === 'player' && parts[2]) return { name: 'college', view: collegePlayer, params: { cid: parts[2] }, query };
   if (parts[0] === 'college') return { name: 'college', view: college, params: {}, query };
   if (parts[0] === 'matchups') return { name: 'matchups', view: matchups, params: {}, query };
+  if (parts[0] === 'live') return { name: 'live', view: live, params: {}, query };
   if (parts[0] === 'about') return { name: 'about', view: about, params: {}, query };
   return { name: 'rankings', view: rankings, params: {}, query };
 }
@@ -166,5 +169,12 @@ async function start() {
   });
   route();
   watchData();
+  liveDot();
+  setInterval(() => { if (!document.hidden) liveDot(); }, 5 * 60e3);
+}
+
+// red dot on the Live tab while an NFL or college game is being played
+function liveDot() {
+  anyLive().then(on => document.querySelector('#nav a[data-route="live"]')?.classList.toggle('live-on', on)).catch(() => {});
 }
 start();

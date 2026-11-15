@@ -60,6 +60,11 @@ open while the code or data changes reloads into the new version when you next c
   nflverse, CC BY-SA 4.0).
 - **Matchups** – fantasy points allowed by every defense to QBs, RBs, WRs and TEs (your scoring), run/pass funnel
   defenses, man/zone coverage rates, and offensive lines (sack, hit and pressure rates, RB yards before contact).
+- **Live** – box scores and fantasy points for every NFL and college QB/RB/WR/TE while games are on, refreshed
+  automatically (NFL every 30 s, college every 60 s): a live scoreboard (click a game for its players), your Sleeper
+  roster and live matchup score, rookies, and for college your prospect board or any draft class, linked to their
+  college profiles. Player pages show a "this week" line. Data: Sleeper's free stats feed (Sportradar), read
+  straight from the browser, so it works the same on the website (`public/js/live.js`).
 - **Player pages** – percentile bars, weekly fantasy points, season history, game log, and college career.
 - **Prospects** – **devy boards** for the two classes after next, and a **big board** for the next draft class (every FBS QB/RB/WR/TE who's draft-eligible, tiered by
   rookie-draft round and led by the **online NFL mock drafts** (Pro Football Network's free Mock Draft Index, linked: the
@@ -105,7 +110,7 @@ open while the code or data changes reloads into the new version when you next c
 | FantasyPros via DynastyProcess, Sleeper | dynasty rookie expert rankings; rookie and startup ADP from real drafts |
 | nflverse combine & draft picks | athletic testing and draft capital for the Prospect Score |
 | FantasyCalc (DynastyProcess fills gaps) | dynasty market values from real trades, and rookie pick values |
-| Sleeper API | player directory, injuries, your league |
+| Sleeper API | player directory, injuries, your league; live NFL and college box scores (Sportradar data) on the Live tab |
 
 **Routes / YPRR:** 2023–25 use on-field participation data. The current season's participation data is published
 after the season, so current-season routes are estimated from snap share × team dropbacks × each player's pass-down

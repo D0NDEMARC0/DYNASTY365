@@ -3,6 +3,7 @@ import { S, rows } from '../store.js';
 import { loadProspects, loadCareer, prospectByCid, loadPahowdy, CM, C_PROFILE, COUNT_STATS, fmtC, fmtRow, collegeHeadshot, stars, mockText } from '../college.js';
 import { pahowdyCard } from '../pahowdy.js';
 import { proCompsCard } from './proComps.js';
+import { collegeStrip } from './live.js';
 import { esc, fmtInt, fmt1, fmtPct, heat, table } from '../ui.js';
 import { pctBars } from '../charts.js';
 import { mount } from './common.js';
@@ -55,6 +56,7 @@ export async function render(root, params) {
       </div>
       ${nfl ? `<a class="btn" href="#/player/${encodeURIComponent(nfl.id)}">NFL profile →</a>` : ''}
     </div></div>
+    <div data-live></div>
     ${profileTiles(pos, bk, rc, info.best, career, eli, elig)}
     ${p ? prospectTiles(p, row) : ''}
     <div class="grid2">
@@ -64,6 +66,8 @@ export async function render(root, params) {
     <div data-comps></div>
     <div class="card"><h2>College career</h2><div class="tablewrap" style="box-shadow:none">${careerTable(pos, career)}</div>
       <p class="muted small" style="margin:8px 0 0">Every season since 2019, including low-volume years. Shading compares each season with qualified FBS ${pos}s that year (shown once a season has enough volume). Source: ESPN college play-by-play via sportsdataverse.</p></div>`;
+  // his line in this week's game, once it starts (still in college only)
+  if (!nfl && last.season === current) collegeStrip(el.querySelector('[data-live]'), { cid, name, pos, team: last.team || p?.school });
   // the NFL players whose college seasons looked most like his (loads its own data)
   proCompsCard(el.querySelector('[data-comps]'), { cid, name, pos, career, hs: eli?.hs ?? null });
   // Pahowdy's Prospect Database: only in the copy of the app on your computer (personal-use data)

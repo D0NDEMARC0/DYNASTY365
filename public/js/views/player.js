@@ -6,6 +6,7 @@ import { columns, pctBars } from '../charts.js';
 import { mount, isRookie } from './common.js';
 import { loadProspects, loadCareer, prospectByCid, loadPahowdy, CM, fmtRow } from '../college.js';
 import { pahowdyCard } from '../pahowdy.js';
+import { nflStrip } from './live.js';
 
 export async function render(root, params, query) {
   rows();
@@ -39,6 +40,7 @@ export async function render(root, params, query) {
         <div>${signalTag(r?.signal, r?.mult)}</div>
       </div>
     </div>
+    <div data-live></div>
     <div class="tiles">
       <div class="tile"><div class="lbl">Lab value</div><div class="val">${fmtInt(r?.lab)}</div><div class="dl">${r?.labRank ? `#${r.labRank} overall · ${p.pos}${r.posRank}` : 'Not ranked'}</div></div>
       <div class="tile"><div class="lbl">Market value</div><div class="val">${fmtInt(r?.market)}</div><div class="dl">${v?.fc ? `FantasyCalc ${fmtInt(v.fc)}` : ''}${v?.dp ? ` · DP ${fmtInt(v.dp)}` : ''}${v?.trend ? ` · 30d ${v.trend > 0 ? '+' : ''}${fmtInt(v.trend)}` : ''}</div></div>
@@ -67,6 +69,7 @@ export async function render(root, params, query) {
     if (b) location.hash = `#/player/${encodeURIComponent(p.id)}?season=${b.dataset.v}`;
   });
 
+  nflStrip(el.querySelector('[data-live]'), p);
   collegeCard(el.querySelector('[data-college]'), p);
   pahowdyBox(el.querySelector('[data-pahowdy]'), p);
   if (!season) return;
