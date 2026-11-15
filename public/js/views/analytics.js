@@ -1,6 +1,6 @@
 // Advanced-stats explorer: per-position leaderboards with percentile heat and a configurable scatter plot.
-import { S, rows, ppg, scoringLabel } from '../store.js';
-import { M, COLUMNS, SCATTER_DEFAULT, SPLIT_COLUMNS, SPLIT_SCATTER, metricValue } from '../metrics.js';
+import { S, rows, ppg, scoringLabel, coverageSeason } from '../store.js';
+import { M, COLUMNS, SCATTER_DEFAULT, SPLIT_COLUMNS, SPLIT_SCATTER, COVERAGE_KEYS, metricValue } from '../metrics.js';
 import { esc, heat, table, sortRows, tipRows, nameMatch } from '../ui.js';
 import { scatter } from '../charts.js';
 import { playerCell, mount } from './common.js';
@@ -42,7 +42,12 @@ export function render(root, params, query) {
     .filter(p => p.pos === st.pos && p.seasons[st.season])
     .map(p => ({ p, s: p.seasons[st.season] }));
 
-  const val = (r, k) => (k === 'ppg' ? ppg(r.p, r.s) : metricValue(r.s, k));
+  // Coverage-tagged stats (man/zone, shells, pressure) for a season whose tags aren't published yet come from the
+  // latest season that has them, and their labels carry that year ("YPRR vs man ’25").
+  const covFrom = () => { const y = coverageSeason(st.season); return y && y !== st.season ? y : null; };
+  const srcOf = (r, k) => { const y = COVERAGE_KEYS.has(k) ? covFrom() : null; return y ? r.p.seasons[y] : r.s; };
+  const val = (r, k) => (k === 'ppg' ? ppg(r.p, r.s) : metricValue(srcOf(r, k), k));
+  const lab = k => { const y = COVERAGE_KEYS.has(k) ? covFrom() : null; return y ? `${M[k].label} ’${String(y).slice(2)}` : M[k].label; };
   const fmtv = (k, v) => (M[k]?.fmt ? M[k].fmt(v) : v ?? '—');
 
   const drawChart = list => {
@@ -64,17 +69,17 @@ export function render(root, params, query) {
       href: `#/player/${encodeURIComponent(r.p.id)}`,
       me: q && nameMatch(r.p.name, q),
       dim: false,
-      tip: tipRows(`${r.p.name} · ${r.s.team || ''}`, [[M[ax.x].label, fmtv(ax.x, val(r, ax.x))], [M[ax.y].label, fmtv(ax.y, val(r, ax.y))], ['Analytics score', r.s.score ?? '—']]),
+      tip: tipRows(`${r.p.name} · ${r.s.team || ''}`, [[lab(ax.x), fmtv(ax.x, val(r, ax.x))], [lab(ax.y), fmtv(ax.y, val(r, ax.y))], ['Analytics score', r.s.score ?? '—']]),
     }));
-    const opts = k => keys.map(x => `<option value="${x}" ${x === k ? 'selected' : ''}>${esc(M[x].label)}</option>`).join('');
+    const opts = k => keys.map(x => `<option value="${x}" ${x === k ? 'selected' : ''}>${esc(lab(x))}</option>`).join('');
     const box = el.querySelector('[data-chart]');
     const w = Math.max(320, box.clientWidth - 32), h = Math.round(Math.min(460, Math.max(300, w * 0.5)));
     box.innerHTML = `
       <div class="chart-head">
-        <h2 style="margin:0">${esc(M[ax.y].label)} vs ${esc(M[ax.x].label)} <span class="muted small" style="font-weight:400">· ${qual.length} qualified ${st.pos}s, ${st.season}</span></h2>
+        <h2 style="margin:0">${esc(lab(ax.y))} vs ${esc(lab(ax.x))} <span class="muted small" style="font-weight:400">· ${qual.length} qualified ${st.pos}s, ${st.season}</span></h2>
         <div class="ctl">X <select data-axis="x">${opts(ax.x)}</select> Y <select data-axis="y">${opts(ax.y)}</select></div>
       </div>
-      ${scatter({ pts, xLabel: M[ax.x].label, yLabel: M[ax.y].label, xFmt: v => fmtv(ax.x, v), yFmt: v => fmtv(ax.y, v), label: top, w, h })}
+      ${scatter({ pts, xLabel: lab(ax.x), yLabel: lab(ax.y), xFmt: v => fmtv(ax.x, v), yFmt: v => fmtv(ax.y, v), label: top, w, h })}
       <div class="muted small">Labeled: top 10 by Analytics Score${q ? ' · search matches highlighted' : ''}. Lines mark the median. Click a dot to open the player.</div>`;
   };
 
@@ -85,24 +90,27 @@ export function render(root, params, query) {
     drawChart(all);
     const est = S.meta.routeSource?.[st.season] === 'snap-estimate';
     const imported = all.filter(r => r.s.routesSrc).length;
-    const covNote = st.set !== 'cov' ? ''
-      : `<p class="note"><b>Coverage &amp; splits</b> come from free charting by FTN Data (via nflverse, CC BY-SA 4.0): man/zone and coverage shells (Cover 1 = man with one deep safety; Cover 2, 3 and 4 = zones with two, three and four deep defenders), the blitz (5+ pass rushers) and pre-snap motion. Each split needs 40+ routes (QBs: 40+ dropbacks). ${est ? `<b>${st.season}:</b> coverage tags are published after the season, so this season has blitz and motion splits only, with routes estimated from each team’s blitz and motion rates (marked *). ` : ''}Contested % = share of targets with a defender in contact at the catch point, a free stand-in for separation (lower = more open).</p>`;
+    const cf = covFrom(), yy = cf ? `’${String(cf).slice(2)}` : '';
+    const fromNote = cf ? `<b>${st.season} coverage tags aren’t out yet:</b> they’re published after the season (${cf}’s came out in February), so man/zone${st.set === 'cov' ? ', coverage-shell, contested and pressure' : ''} columns show <b>${cf}</b> (marked ${yy}) until then. ` : '';
+    const covNote = st.set !== 'cov' ? (cf && ['WR', 'TE'].includes(st.pos) ? `<p class="note">${fromNote}</p>` : '')
+      : `<p class="note">${fromNote}<b>Coverage &amp; splits</b> come from free charting by FTN Data (via nflverse, CC BY-SA 4.0): man/zone and coverage shells (Cover 1 = man with one deep safety; Cover 2, 3 and 4 = zones with two, three and four deep defenders), the blitz (5+ pass rushers) and pre-snap motion. Each split needs 40+ routes (QBs: 40+ dropbacks). ${est ? `Blitz and motion are ${st.season}, with routes estimated from each team’s blitz and motion rates (marked *). ` : ''}Contested % = share of targets with a defender in contact at the catch point, a free stand-in for separation (lower = more open).</p>`;
     el.querySelector('[data-note]').innerHTML = covNote + (est && ['WR', 'TE', 'RB'].includes(st.pos)
       ? `<p class="note"><b>${st.season} routes are estimated</b> (marked *): play-level participation data is published after the season, so routes = snap share × team dropbacks × each player’s historical pass-down skew, back-tested at ~${Math.round((S.meta.routeDiag?.[st.season - 1]?.mape ?? 0.07) * 100)}% average error. ${imported ? `${imported} players use imported route counts.` : 'Drop PFF CSV exports into <code>data/imports</code> for exact counts (see Methodology).'}</p>`
       : '');
     // imported metrics, and man/zone splits (published after each season), only show when the season has them
     const metricKeys = st.set === 'cov'
-      ? colSet().filter(k => ['ppg', 'routes', 'db'].includes(k) || all.some(r => metricValue(r.s, k) != null))
-      : COLUMNS[st.pos].filter(k => !(k.startsWith('x_') || /Man$|Zone$/.test(k)) || all.some(r => metricValue(r.s, k) != null));
+      ? colSet().filter(k => ['ppg', 'routes', 'db'].includes(k) || all.some(r => val(r, k) != null))
+      : COLUMNS[st.pos].filter(k => !(k.startsWith('x_') || /Man$|Zone$/.test(k)) || all.some(r => val(r, k) != null));
     const cols = [
       { key: 'rk', label: '#', n: true, cell: (r, i) => `<td class="rank">${i + 1}</td>` },
       { key: 'name', label: 'Player', sort: r => r.p.name, cell: r => `<td>${playerCell(r.p, { size: 26 })}</td>` },
       { key: 'g', label: 'G', n: true, sort: r => r.s.g, cell: r => `<td class="n">${r.s.g}</td>` },
       ...metricKeys.map(k => ({
-        key: k, label: M[k].label, n: true, title: `${M[k].desc} (${M[k].src})`, sort: r => val(r, k),
+        key: k, label: lab(k), n: true, sort: r => val(r, k),
+        title: `${M[k].desc} (${M[k].src})${cf && COVERAGE_KEYS.has(k) ? `. Showing ${cf}: ${st.season} coverage tags are published after the season` : ''}`,
         cell: r => {
           const v = val(r, k);
-          const pct = k === 'score' ? r.s.score : r.s.pct?.[k];
+          const pct = k === 'score' ? r.s.score : srcOf(r, k)?.pct?.[k];
           let extra = '';
           if (k === 'routes' && r.s.routesSrc) extra = ` <span class="tag src" title="From imported ${esc(r.s.routesSrc)} data">${esc(r.s.routesSrc)}</span>`;
           else if (['routes', 'yprr', 'tprr', 'rp', 'yprrBlitz', 'tprrBlitz', 'yprrMo', 'yprrNoMo'].includes(k) && r.s.routesEst && v != null) extra = '<span class="muted" title="Estimated">*</span>';

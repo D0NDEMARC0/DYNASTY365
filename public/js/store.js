@@ -67,6 +67,20 @@ export async function loadValues() {
   bump();
 }
 
+/**
+ * The season whose coverage-tagged stats (man/zone, coverage shells, pressure splits) to show for `season`: the season
+ * itself once its tags are published, otherwise the latest earlier season that has them (null if none).
+ */
+const covSeason = {};
+export function coverageSeason(season) {
+  if (covSeason[season] !== undefined) return covSeason[season];
+  const has = y => S.data.players.some(p => p.seasons[y]?.yprrMan != null || p.seasons[y]?.epaMan != null);
+  let out = null;
+  if (has(season)) out = season;
+  else for (const y of [...S.meta.seasons].sort((a, b) => b - a)) if (y < season && has(y)) { out = y; break; }
+  return (covSeason[season] = out);
+}
+
 /** Coverage / blitz / motion splits and route trees for one season, by player id (loaded when a player page needs them). */
 const splitCache = {};
 export async function loadSplits(season) {

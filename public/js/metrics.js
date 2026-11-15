@@ -147,6 +147,10 @@ export const SPLIT_COLUMNS = {
   RB: ['ppg', 'routes', 'yprr', 'tprr', 'yprrMan', 'yprrZone', 'yprrBlitz', 'yprrMo', 'yprrNoMo'],
   QB: ['ppg', 'db', 'epadb', 'epaMan', 'epaZone', 'epaBlitz', 'epaNoBlitz', 'epaPress', 'epaClean', 'press', 'ttt', 'twp'],
 };
+// Stats that need per-play coverage or pressure tags. Those tags (nflverse participation data) are published after
+// each season, so for the season in progress the app shows the latest season that has them, labeled with its year.
+export const COVERAGE_KEYS = new Set(['yprrMan', 'yprrZone', 'tprrMan', 'tprrZone', 'yprrC1', 'yprrC2', 'yprrC3', 'yprrC4',
+  'contMan', 'contZone', 'vert', 'epaMan', 'epaZone', 'epaPress', 'epaClean']);
 export const SPLIT_SCATTER = { WR: ['yprrZone', 'yprrMan'], TE: ['yprrZone', 'yprrMan'], RB: ['yprrZone', 'yprrMan'], QB: ['epaNoBlitz', 'epaBlitz'] };
 
 export const SCATTER_DEFAULT = { WR: ['tprr', 'yprr'], TE: ['tprr', 'yprr'], RB: ['osh', 'exp10'], QB: ['cpoe', 'epadb'] };
