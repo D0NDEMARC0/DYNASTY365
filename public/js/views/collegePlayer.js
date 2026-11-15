@@ -2,6 +2,7 @@
 import { S, rows } from '../store.js';
 import { loadProspects, loadCareer, prospectByCid, loadPahowdy, CM, C_PROFILE, COUNT_STATS, fmtC, fmtRow, collegeHeadshot, stars, mockText } from '../college.js';
 import { pahowdyCard } from '../pahowdy.js';
+import { proCompsCard } from './proComps.js';
 import { esc, fmtInt, fmt1, fmtPct, heat, table } from '../ui.js';
 import { pctBars } from '../charts.js';
 import { mount } from './common.js';
@@ -60,8 +61,11 @@ export async function render(root, params) {
       <div class="card"><h2>Best season vs ${pos}s · ${best.season ?? ''}</h2>${percentiles(pos, best)}</div>
       ${p?.combine ? `<div class="card"><h2>Combine</h2>${combineCard(p)}</div>` : `<div class="card"><h2>Breakout</h2>${breakoutText(bk, pos)}</div>`}
     </div>
+    <div data-comps></div>
     <div class="card"><h2>College career</h2><div class="tablewrap" style="box-shadow:none">${careerTable(pos, career)}</div>
       <p class="muted small" style="margin:8px 0 0">Every season since 2019, including low-volume years. Shading compares each season with qualified FBS ${pos}s that year (shown once a season has enough volume). Source: ESPN college play-by-play via sportsdataverse.</p></div>`;
+  // the NFL players whose college seasons looked most like his (loads its own data)
+  proCompsCard(el.querySelector('[data-comps]'), { cid, name, pos, career, hs: eli?.hs ?? null });
   // Pahowdy's Prospect Database: only in the copy of the app on your computer (personal-use data)
   if (S.mode === 'server') {
     const ph = await loadPahowdy();

@@ -269,3 +269,19 @@ table.data tbody tr.tierrow:hover td { background: var(--surface-2); }
 .tag.funnel.pass { background: color-mix(in oklab, var(--accent) 16%, transparent); color: var(--accent-ink); }
 /* group breaks in split tables (player pages) */
 table.data tr.sep-top td { border-top: 2px solid var(--border); }
+
+/* pro comps (college player pages) */
+.comps { margin-top: 16px; }
+.comps .chead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.comps .seg { flex-wrap: wrap; }
+.comps tr[data-c] { cursor: pointer; }
+.comps table.data tbody tr.sel td { background: color-mix(in oklab, var(--accent) 11%, var(--surface)); }
+.comps .gap { font-size: 10px; letter-spacing: 1px; color: var(--accent-ink); white-space: nowrap; }
+.comps .gap.g0 { color: var(--muted); }
+.comps .cmp-detail { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--grid); }
+.comps .cmp-detail h3 { font-size: 15px; }
+.comps .cmp-detail table.data { width: auto; min-width: min(100%, 560px); }
+.comps .cmp-detail table.data td.n { padding-left: 18px; }
+.comps .cmpfind { margin-top: 14px; }
+.comps .cmpfind input { width: min(100%, 360px); box-sizing: border-box; }
+.comps [data-found] { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

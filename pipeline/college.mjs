@@ -4,8 +4,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { cached, cachedJSON, nflverse, readCSV } from './fetch.mjs';
-import { readParquet } from './load.mjs';
+import { readParquet, parquetColumns } from './load.mjs';
 import { nameKey } from './imports.mjs';
+import { buildComps } from './comps.mjs';
+import { VOL, SHOW, QUAL, hasVolume } from '../public/js/comps.js';
 import { fitDraftModel, ridge, spearman } from './draftmodel.mjs';
 import { loadPahowdy, slimPahowdy, PAHOWDY } from './pahowdy.mjs';
 import { wikiPlayers, recentViews, historyViews, avgViews, findArticles } from './wiki.mjs';
@@ -28,11 +30,14 @@ const schoolKey = s => String(s || '').toLowerCase().replace(/\bstate\b/g, 'st')
 
 async function sdv(tag, file, season, current, columns) {
   const p = await cached(`${SDV}/${tag}/${file}`, `cfb_${file}`, season >= current ? 12 : 24 * 30);
-  return p ? readParquet(p, columns) : [];
+  if (!p) return [];
+  // older seasons' files don't always carry every column
+  const have = new Set(await parquetColumns(p));
+  return readParquet(p, columns.filter(c => have.has(c)));
 }
 
 // ---------------------------------------------------------------- one college season
-async function loadSeason(season, current) {
+export async function loadSeason(season, current) {
   const [usage, box, rec, rush, pass, roster, tierRush, tierRec] = await Promise.all([
     sdv('espn_cfb_adv_player_usage', `adv_player_usage_${season}.parquet`, season, current,
       ['pos_team_id', 'player_id', 'player_name', 'position_group', 'game_id', 'rushes', 'targets', 'receptions', 'touches', 'opportunities',
@@ -135,7 +140,27 @@ async function loadSeason(season, current) {
     }
   }
 
-  const R = new Map(roster.map(r => [String(r.athlete_id), r]));
+  // A player can have more than one roster row in a season (all-star games such as the Senior Bowl have their own
+  // "teams", e.g. NORTH or East), so use the row for the team he played most of his games for, and name the school
+  // from that team's own roster.
+  const R = new Map(), teamInfo = new Map();
+  for (const r of roster) {
+    const id = String(r.athlete_id), t = String(r.team_id);
+    if (!R.has(id)) R.set(id, []);
+    R.get(id).push(r);
+    if (!teamInfo.has(t) && r.team_location) teamInfo.set(t, { loc: r.team_location, div: r.division });
+  }
+  // ESPN has no positions before 2014 (rosters say "-", usage has no position group). For those seasons (used only by
+  // the pro comps' history), infer the role from the stats: mostly passing = QB, mostly carries = RB, mostly
+  // targets = WR, or TE at 238 lb and up.
+  const known = roster.filter(r => SKILL.has(posOf(r.position_abbreviation))).length + usage.filter(u => SKILL.has(u.position_group)).length;
+  const inferPos = known >= 200 ? null : (o, ro) => {
+    const tg = Math.max(o.uTargets, o.aTgt || 0, o.rec);
+    if (o.pa >= 10 && o.pa >= o.car) return 'QB';
+    if (o.car >= 8 && o.car >= 1.5 * tg) return 'RB';
+    if (tg >= 3) return (ro?.weight ?? 0) >= 238 ? 'TE' : 'WR';
+    return o.car >= 3 ? 'RB' : null;
+  };
   // league context: typical number of team games so far (for prorated volume thresholds)
   const fbsTeams = new Set(roster.filter(r => r.division === 'fbs').map(r => String(r.team_id)));
   const tg = [...T.entries()].filter(([id]) => fbsTeams.has(id)).map(([, t]) => t.games.size).sort((a, b) => a - b);
@@ -143,11 +168,14 @@ async function loadSeason(season, current) {
 
   const out = new Map();
   for (const [id, o] of P) {
-    const ro = R.get(id);
+    const tid = Object.entries(o.teams).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const ros = R.get(id) || [];
+    const ro = ros.find(r => String(r.team_id) === tid) || ros[0];
     let pos = posOf(ro?.position_abbreviation) || null;
     if (!SKILL.has(pos)) pos = SKILL.has(o.group) ? o.group : null;
+    const inferred = !pos && !!inferPos;
+    if (inferred) pos = inferPos(o, ro);
     if (!pos) continue;
-    const tid = Object.entries(o.teams).sort((a, b) => b[1] - a[1])[0]?.[0];
     const t = T.get(tid) || { passAtt: 0, recYds: 0, recTd: 0, rushAtt: 0, rushYds: 0 };
     const g = o.games.size;
     const tgt = Math.max(o.uTargets, o.aTgt || 0);
@@ -156,8 +184,9 @@ async function loadSeason(season, current) {
     for (const gm of o.games) { const tm = o.gt?.[gm]; if (tm) teamDb += drop.get(`${gm}|${tm}`) || 0; }
     const routes = teamDb * (COLLEGE_ROUTE_RATE[pos] || 0);
     const s = {
-      season, cid: id, name: ro?.full_name || o.name, pos, team: ro?.team_location || null, tid, div: ro?.division || null,
-      tier: tierByTeam.get(String(tid)) || (ro?.division === 'fcs' ? 'FCS' : null),
+      season, cid: id, name: ro?.full_name || o.name, pos, team: teamInfo.get(tid)?.loc || ro?.team_location || null, tid,
+      div: teamInfo.get(tid)?.div || ro?.division || null,
+      tier: tierByTeam.get(String(tid)) || ((teamInfo.get(tid)?.div || ro?.division) === 'fcs' ? 'FCS' : null),
       cls: ro?.experience_abbreviation || null, ht: ro?.height ?? null, wt: ro?.weight ?? null, g,
       tgt, rec: o.rec, reyd: o.reyd, retd: o.retd, car: o.car, ruyd: o.ruyd, rutd: o.rutd, pc: o.pc, pa: o.pa, pyd: o.pyd, ptd: o.ptd, int: o.int,
       // shares
@@ -185,6 +214,7 @@ async function loadSeason(season, current) {
       routes: routes ? Math.round(routes) : null, yprr: rd(div(o.reyd, routes), 2), tprr: rd(div(tgt, routes)),
       hs: ro?.headshot_href || null, dob: ro?.date_of_birth || null,
       recruitId: ro?.cfbd_recruit_ids ? String(ro.cfbd_recruit_ids).replace(/[^0-9,]/g, '').split(',')[0] || null : null,
+      ...(inferred ? { ip: true } : {}),
     };
     out.set(id, s);
   }
@@ -192,10 +222,8 @@ async function loadSeason(season, current) {
   return { players: out, teamGames, rosterIds: roster.map(r => String(r.athlete_id)) };
 }
 
-// volume needed to show up / to qualify for percentiles, per team game
-const VOL = { WR: s => s.tgt, TE: s => s.tgt, RB: s => s.car + s.tgt, QB: s => s.pa };
-const SHOW = { WR: 2, TE: 1.5, RB: 4, QB: 8 };
-const QUAL = { WR: 3.5, TE: 2.5, RB: 7, QB: 15 };
+// volume needed to show up / to qualify for percentiles, per team game (shared with the app's pro comps)
+export { VOL, SHOW, QUAL };
 export const COLLEGE_PCT = {
   WR: ['tsh', 'ysh', 'dom', 'yptpa', 'yprr', 'tprr', 'ypt', 'ypr', 'catch', 'epat', 'rsr', 'adot', 'yacr', 'exp', 'rec20r', 'deep', 'fdt', 'scpg', 'rztd'],
   TE: ['tsh', 'ysh', 'dom', 'yptpa', 'yprr', 'tprr', 'ypt', 'ypr', 'catch', 'epat', 'rsr', 'adot', 'yacr', 'exp', 'rec20r', 'deep', 'fdt', 'scpg', 'rztd'],
@@ -215,7 +243,7 @@ function midRankFn(values) {
   };
 }
 
-function percentilesForSeason(players, teamGames) {
+export function percentilesForSeason(players, teamGames) {
   for (const pos of Object.keys(COLLEGE_PCT)) {
     const all = [...players.values()].filter(s => s.pos === pos);
     const pool = all.filter(s => VOL[pos](s) >= QUAL[pos] * teamGames && s.div === 'fbs');
@@ -322,13 +350,22 @@ export async function buildCollege({ current, nflBy, gsis2sid, out, log, private
     if (!career.has(cid)) career.set(cid, []);
     career.get(cid).push(s);
   }
-  // ESPN roster files carry each player's *latest* class in every season, so count back from the last season.
+  // first and last season on a college roster (redshirt, injury and opt-out years included)
+  const firstRoster = new Map(), lastRoster = new Map();
+  for (const y of Object.keys(bySeason).map(Number).sort((a, b) => a - b)) {
+    for (const id of bySeason[y].rosterIds || []) { if (!firstRoster.has(id)) firstRoster.set(id, y); lastRoster.set(id, y); }
+  }
+  // ESPN roster files carry each player's *latest* class in every season: the class of his last roster year, which can
+  // come after his last season with stats (an opt-out or injury year, at most one), so count back from that year.
   const CLS = ['FR', 'SO', 'JR', 'SR'];
-  for (const list of career.values()) {
+  const classRef = new Map(); // cid -> [class number, the roster year it belongs to]
+  for (const [cid, list] of career) {
     const last = list[list.length - 1];
     const n = CLASS_NUM[last.cls];
     if (!n) continue;
-    for (const s of list) s.cls = CLS[Math.min(3, Math.max(0, n - 1 - (last.season - s.season)))];
+    const ref = Math.max(last.season, Math.min(lastRoster.get(cid) ?? last.season, last.season + 1));
+    classRef.set(cid, [n, ref]);
+    for (const s of list) s.cls = CLS[Math.min(3, Math.max(0, n - 1 - (ref - s.season)))];
   }
 
   // recruiting (stars / composite grade): match on name + position + recruiting class year
@@ -472,10 +509,6 @@ export async function buildCollege({ current, nflBy, gsis2sid, out, log, private
   // ---- NFL draft eligibility (three seasons out of high school). The first college roster year is the
   // high-school class for almost everyone; the recruiting class catches gap years / prep school / missions, and
   // ESPN's class year (which never runs ahead of years since high school) catches JUCO transfers.
-  const firstRoster = new Map(), lastRoster = new Map();
-  for (const y of Object.keys(bySeason).map(Number).sort((a, b) => a - b)) {
-    for (const id of bySeason[y].rosterIds || []) { if (!firstRoster.has(id)) firstRoster.set(id, y); lastRoster.set(id, y); }
-  }
   const dataStart = Math.min(...Object.keys(bySeason).map(Number));
   const eligByCid = new Map();
   for (const [cid, list] of career) {
@@ -483,8 +516,8 @@ export async function buildCollege({ current, nflBy, gsis2sid, out, log, private
     const info = careerInfo.get(cid);
     let hs = first;
     if (info.rc?.year && info.rc.year < hs && info.rc.year >= hs - 2) hs = info.rc.year;
-    const last = list[list.length - 1], n = CLASS_NUM[last.cls];
-    if (n && last.season - n + 1 < hs) hs = last.season - n + 1;
+    const cr = classRef.get(cid);
+    if (cr && cr[1] - cr[0] + 1 < hs) hs = cr[1] - cr[0] + 1;
     const el = { year: hs + YEARS_OUT_OF_HS, hs, ...(first <= dataStart ? { early: true } : {}) };
     eligByCid.set(cid, el);
     info.el = el;
@@ -766,6 +799,12 @@ export async function buildCollege({ current, nflBy, gsis2sid, out, log, private
   }
   for (let i = prospects.length - 1; i >= 0; i--) if (dropped.has(prospects[i])) prospects.splice(i, 1);
   for (const [cls, c] of Object.entries(classes)) if (c.status === 'watch' || c.status === 'devy') c.count = prospects.filter(p => p.draftClass === Number(cls)).length;
+
+  // ---- pro comps: the NFL players whose college seasons looked most like each prospect's (comps_*.json + board column)
+  const show = s => hasVolume(s, bySeason[s.season]?.teamGames);
+  try {
+    await buildComps({ current, career, eligByCid, bySeason, nflBy, gsis2sid, prospects, show, out, log });
+  } catch (e) { log('  pro comps unavailable this run:', e.message); }
 
   // ---- write files
   const slim = s => Object.fromEntries(Object.entries(s).filter(([k, v]) => v != null && !['hs', 'dob', 'recruitId', 'tid'].includes(k)));

@@ -76,6 +76,15 @@ open while the code or data changes reloads into the new version when you next c
 - **College** – college football advanced stats explorer (EPA, success rate, explosive run %, stuff rate,
   breakaway %, target share, dominator, YPRR/TPRR (est.), explosive catch %, CPOE…) with scatter plots, NFL draft
   eligibility (three years out of high school), plus a profile page for every college player.
+- **Pro comps** – on every college player page: the 10 former and current NFL players whose college season looked
+  most like his at the same year of college (or any year), with a similarity score, their college line, and what
+  they did in the NFL (draft slot, best PPR finish, top-12/top-24 seasons, dynasty value), a stat-by-stat
+  side-by-side, and a search to compare with any pro. The pool is every college season since 2004 by a player who
+  was drafted or played an NFL game; the board shows each prospect's closest comp. Matching lives in
+  `public/js/comps.js` (shared by the app and the build). Seasons before the app's college window come from a
+  committed snapshot, `pipeline/comps_history.json.gz`, made once by `node --max-old-space-size=6144
+  pipeline/comps-seed.mjs` (about 900 MB of ESPN play-by-play to download; re-run it only if the snapshot ever ends
+  before the live window starts, which the build log warns about).
 - **League** – enter your Sleeper username: power rankings, contend/rebuild quadrant, positional rooms, draft capital,
   best lineups, sell-high candidates and buy-low targets. Format and scoring come from the league automatically.
 - **Methodology** – every data source, metric definition and model weight.
@@ -88,7 +97,8 @@ open while the code or data changes reloads into the new version when you next c
 | NFL Next Gen Stats (via nflverse) | separation, cushion, YAC over expected, RYOE, time to throw |
 | FTN charting (via nflverse) | drops, contested/catchable targets, screens, play-action |
 | Pro Football Reference (via nflverse) | yards before/after contact, broken tackles, bad throws, pressures |
-| sportsdataverse (ESPN college data) | college play-by-play + advanced stats (EPA, success rate, explosive runs, shares, CPOE), rosters, recruiting |
+| sportsdataverse (ESPN college data) | college play-by-play + advanced stats (EPA, success rate, explosive runs, shares, CPOE), rosters, recruiting; 2004 onward for pro comps |
+| nflverse season stats (`stats_player_reg`) | NFL results of every pro comp since 2005: games, PPR points per game, positional finishes |
 | ffopportunity (ffverse) | expected fantasy points (xFP) and points over expected |
 | Wikimedia (Wikidata, Wikipedia pageviews) | college players' birth dates and the "Buzz" attention signal (public domain) |
 | DynastyProcess archive of FantasyPros rankings | past pre-draft rookie rankings, used to train the expert-style projection |

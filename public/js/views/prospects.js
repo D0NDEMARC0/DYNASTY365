@@ -28,6 +28,10 @@ const projCell = p => {
   return p.proj.pick ? `<span${tip}>R${p.proj.round} · #${p.proj.pick}</span>` : `<span class="muted"${tip}>UDFA</span>`;
 };
 const ageCell = p => (p.age != null ? `${p.ageEst ? '~' : ''}${fmt1(p.age)}` : '—');
+// closest pro at the same stage of college, for his latest season with real volume (see the player page for 10)
+const compCell = p => (!p.pc ? '<td class="small muted">—</td>'
+  : `<td class="small" title="${esc(`${p.pc.n}’s ${p.pc.s} college season is the closest match to his ${p.pc.ts} by a player who reached the NFL, at the same year of college (similarity ${p.pc.sim}/100). Open his page for the 10 closest and what they did in the NFL.`)}">${esc(p.pc.n)} <span class="muted">’${String(p.pc.s).slice(2)} · ${p.pc.sim}</span></td>`);
+const COMP_TITLE = 'The NFL player (former or current) whose college season at the same year of college looked most like this player’s latest season, and how alike (0–100). Open a player for his 10 closest comps and their NFL results';
 const brkNote = p => (p.brk?.cls ? ` <span class="muted small">${p.brk.age ? `${p.brk.est ? '~' : ''}${fmt1(p.brk.age)}` : esc(p.brk.cls)}</span>` : '');
 
 export async function render(root, params, query) {
@@ -158,6 +162,7 @@ export async function render(root, params, query) {
       { label: 'Production', n: true, title: 'College production & efficiency percentile vs. prospects at the position', cell: x => `<td class="n heat" style="${heat(x.p.comps?.prod)}">${x.p.comps?.prod ?? '—'}</td>` },
       { label: 'Breakout', n: true, title: 'How early he became a featured producer (age, or class year)', cell: x => `<td class="n heat" style="${heat(x.p.comps?.brk)}">${x.p.comps?.brk ?? '—'}${brkNote(x.p)}</td>` },
       { label: 'Recruit', title: 'High-school recruiting stars (247 composite)', cell: x => `<td class="small" title="${x.p.recruit ? `Grade ${x.p.recruit.grade} (${x.p.recruit.year})` : ''}">${x.p.recruit ? stars(x.p.recruit.stars) : '—'}</td>` },
+      ...(classList.some(p => p.pc) ? [{ label: 'Pro comp', title: COMP_TITLE, cell: x => compCell(x.p) }] : []),
       ...(hasEcr ? [{ label: 'Experts', n: true, title: 'FantasyPros dynasty rookie rankings (expert consensus rank)', cell: x => `<td class="n">${x.p.ecr ? fmt1(x.p.ecr.rank) : '—'}</td>` }] : []),
       ...(hasAdp ? [{ label: 'ADP', n: true, title: 'Sleeper ADP from real drafts', cell: x => `<td class="n">${adpOf(x.p) != null ? fmt1(adpOf(x.p)) : '—'}</td>` }] : []),
       ...boards.map(b => ({ label: esc(b.name), n: true, title: `Rank on your pasted ${b.name} board`, cell: x => `<td class="n">${b.rank(x.p) ?? '<span class="muted">—</span>'}</td>` })),
@@ -206,6 +211,7 @@ export async function render(root, params, query) {
         ? [{ key: 'dc', label: 'Draft cap', n: true, title: 'Draft capital score from pick number', sort: p => p.comps?.dc, cell: p => cell(p.comps?.dc) }]
         : [{ key: 'pdc', label: 'Proj. DC', n: true, title: 'Projected draft capital: scored like real draft capital, from the projected pick (0 = projected undrafted)', sort: p => p.comps?.pdc, cell: p => cell(p.comps?.pdc) }]),
       { key: 'score', label: 'Score', n: true, title: 'Prospect Score (0–100)', sort: p => p.score, cell: p => `<td class="n heat" style="${heat(p.score)}"><b>${p.score ?? '—'}</b></td>` },
+      ...(classList.some(p => p.pc) ? [{ key: 'pc', label: 'Pro comp', title: COMP_TITLE, cell: compCell }] : []),
       ...phCol,
       { key: 'mkt', label: 'Dynasty value', n: true, title: 'Current dynasty market value (once in the NFL)', sort: p => market(p), cell: p => `<td class="n">${market(p) ? fmtInt(market(p)) : '<span class="muted">—</span>'}</td>` },
     ];
