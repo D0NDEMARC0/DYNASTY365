@@ -24,9 +24,38 @@ export function persist() {
 }
 export const bump = () => { S.version++; };
 
-export const pprParam = () => {
+/**
+ * The scoring in use, as Sleeper scoring_settings (points per stat): your linked league's, your custom scoring
+ * (Custom scoring in the header), or the PPR / half / standard preset.
+ */
+export function scoringRules() {
   const sc = S.settings.scoring;
-  if (sc === 'league' && S.league) { const rec = S.league.scoring.rec ?? 0; return rec >= 0.75 ? 1 : rec >= 0.25 ? 0.5 : 0; }
+  if (sc === 'league' && S.league) return S.league.scoring;
+  if (sc === 'custom' && S.settings.custom) return S.settings.custom;
+  const tep = S.settings.tep || 0, key = `${sc}|${tep}`;
+  if (!presetRules.has(key)) presetRules.set(key, { ...(PRESETS[sc] || PRESETS.ppr), ...(tep ? { bonus_rec_te: tep } : {}) });
+  return presetRules.get(key);
+}
+const presetRules = new Map();
+/**
+ * TE premium: extra points per catch by a tight end. Your league's when its scoring is in use, your custom scoring's,
+ * or the header's choice on top of PPR / half / standard.
+ */
+export function tePremium() {
+  const sc = S.settings.scoring;
+  if (sc === 'league' && S.league) return S.league.scoring.bonus_rec_te || 0;
+  if (sc === 'custom' && S.settings.custom) return S.settings.custom.bonus_rec_te || 0;
+  return S.settings.tep || 0;
+}
+// a season's catches (older data may only have the points)
+const catches = s => s.box?.rec ?? Math.max(0, (s.fp?.ppr ?? 0) - (s.fp?.std ?? 0));
+/** League or custom scoring (scored stat by stat), or null for a preset (whose season points are precomputed). */
+const exactRules = () => ((S.settings.scoring === 'league' && S.league) || (S.settings.scoring === 'custom' && S.settings.custom) ? scoringRules() : null);
+
+export const pprParam = () => {
+  const ex = exactRules();
+  if (ex) { const rec = ex.rec ?? 0; return rec >= 0.75 ? 1 : rec >= 0.25 ? 0.5 : 0; }
+  const sc = S.settings.scoring;
   return sc === 'std' ? 0 : sc === 'half' ? 0.5 : 1;
 };
 
@@ -99,21 +128,24 @@ export async function loadLogs(season) {
 // ---------- scoring ----------
 export function scoringLabel() {
   const sc = S.settings.scoring;
-  if (sc === 'league' && S.league) return 'League scoring';
-  return { ppr: 'PPR', half: 'Half PPR', std: 'Standard' }[sc] || 'PPR';
+  const base = sc === 'league' && S.league ? 'League scoring' : sc === 'custom' && S.settings.custom ? 'Custom scoring'
+    : { ppr: 'PPR', half: 'Half PPR', std: 'Standard' }[sc] || 'PPR';
+  const tep = tePremium();
+  return tep ? `${base} · TE +${tep}` : base;
 }
 export function seasonPoints(p, s) {
   if (!s) return null;
-  const sc = S.settings.scoring;
-  if (sc === 'league' && S.league) return pointsFromBox(s.box, S.league.scoring, p.pos);
-  return s.fp[sc] ?? s.fp.ppr;
+  const ex = exactRules();
+  if (ex) return pointsFromBox(s.box, ex, p.pos);
+  const base = s.fp[S.settings.scoring] ?? s.fp.ppr;
+  return p.pos === 'TE' && S.settings.tep ? base + S.settings.tep * catches(s) : base;
 }
 export function ppg(p, s) { return s && s.g ? seasonPoints(p, s) / s.g : null; }
 /** Weekly points from a game-log row: [wk, opp, std, ppr, rec, ...] */
 export function weekPoints(p, row) {
-  const sc = S.settings.scoring;
-  if (sc === 'league' && S.league) {
-    const sc2 = S.league.scoring, k = key => sc2[key] || 0;
+  const sc = S.settings.scoring, ex = exactRules();
+  if (ex) {
+    const k = key => ex[key] || 0;
     const [, , , , rec, , reyd, retd, car, ruyd, rutd, cmp, att, pyd, ptd, int] = row;
     let pts = rec * k('rec') + reyd * k('rec_yd') + retd * k('rec_td') + car * k('rush_att') + ruyd * k('rush_yd') + rutd * k('rush_td')
       + pyd * k('pass_yd') + ptd * k('pass_td') + int * k('pass_int') + cmp * k('pass_cmp') + att * k('pass_att');
@@ -123,7 +155,8 @@ export function weekPoints(p, row) {
     return pts;
   }
   const std = row[2], ppr = row[3], rec = row[4];
-  return sc === 'std' ? std : sc === 'half' ? std + 0.5 * rec : ppr;
+  const te = p.pos === 'TE' ? (S.settings.tep || 0) * rec : 0;
+  return (sc === 'std' ? std : sc === 'half' ? std + 0.5 * rec : ppr) + te;
 }
 
 export function latestSeason(p) {

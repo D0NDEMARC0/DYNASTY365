@@ -60,8 +60,9 @@ open while the code or data changes reloads into the new version when you next c
   nflverse, CC BY-SA 4.0).
 - **Matchups** – fantasy points allowed by every defense to QBs, RBs, WRs and TEs (your scoring), run/pass funnel
   defenses, man/zone coverage rates, and offensive lines (sack, hit and pressure rates, RB yards before contact).
-- **Live** – box scores and fantasy points for every NFL and college QB/RB/WR/TE while games are on, refreshed
-  automatically (NFL every 30 s, college every 60 s): a live scoreboard (click a game for its players), your Sleeper
+- **Live** – box scores (passing, rushing, receiving; per team for one game) and fantasy points in your league's,
+  preset or custom scoring, with TE premium, for every NFL and college QB/RB/WR/TE while games are on, refreshed
+  automatically (NFL every 30 s, college every 60 s): a live scoreboard (click a game for its box score), your Sleeper
   roster and live matchup score, rookies, and for college your prospect board or any draft class, linked to their
   college profiles. Player pages show a "this week" line. Data: Sleeper's free stats feed (Sportradar), read
   straight from the browser, so it works the same on the website (`public/js/live.js`).

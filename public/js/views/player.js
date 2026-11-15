@@ -95,7 +95,7 @@ export async function render(root, params, query) {
   });
   const wk = el.querySelector('[data-weekly]');
   if (wk) wk.innerHTML = columns({ data, avg, avgLabel: 'Avg', w: Math.max(300, wk.clientWidth), h: 250, yFmt: x => x.toFixed(x % 1 && Math.abs(x) < 10 ? 1 : 0) })
-    + `<div class="muted small">${scoringLabel()}${S.settings.scoring === 'league' ? ' (weekly bars exclude fumbles, 2-pt and first-down bonuses)' : ''} · line = season average · hover a week for details</div>`;
+    + `<div class="muted small">${scoringLabel()}${['league', 'custom'].includes(S.settings.scoring) ? ' (weekly bars exclude fumbles, 2-pt and first-down bonuses)' : ''} · line = season average · hover a week for details</div>`;
   const lg = el.querySelector('[data-log]');
   if (lg) lg.innerHTML = gameLog(p, games);
 }

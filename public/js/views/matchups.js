@@ -1,5 +1,5 @@
 // Matchups: fantasy points allowed by each defense, run/pass funnels, coverage tendencies and offensive lines.
-import { S, pprParam } from '../store.js';
+import { S, pprParam, tePremium } from '../store.js';
 import { fetchData } from '../version.js';
 import { esc, heat, table, sortRows } from '../ui.js';
 import { mount } from './common.js';
@@ -42,12 +42,17 @@ export async function render(root, params, query) {
   const valCell = (v, p, rank, f = x => x.toFixed(1)) => `<td class="n heat" style="${heat(p)}">${v == null ? '—' : f(v)}${rank ? ` <span class="muted small">${ord(rank)}</span>` : ''}</td>`;
 
   const defCols = () => {
-    const fpa = pos => r => r.def.fpa?.[pos]?.[fmt] ?? null;
+    const tep = tePremium();
+    const fpa = pos => r => {
+      const f = r.def.fpa?.[pos], v = f?.[fmt];
+      if (v == null) return null;
+      return pos === 'TE' && tep ? Math.round((v + tep * (f.ppr - f.std)) * 10) / 10 : v;
+    };
     return [
       { key: 'team', label: 'Defense', sort: r => r.team, cell: teamCell },
       ...POS.map(pos => {
         const get = fpa(pos), p = pctFn(get, true), rk = rankFn(get, true);
-        return { key: pos, label: `vs ${pos}`, n: true, title: `Fantasy points per game allowed to opposing ${pos}s (${fmtLabel}), ${data.season}. Rank 1st = gives up the most (best matchup)`, sort: get, cell: r => valCell(get(r), p(get(r)), rk(r)) };
+        return { key: pos, label: `vs ${pos}`, n: true, title: `Fantasy points per game allowed to opposing ${pos}s (${fmtLabel}${pos === 'TE' && tep ? `, TE +${tep} per catch` : ''}), ${data.season}. Rank 1st = gives up the most (best matchup)`, sort: get, cell: r => valCell(get(r), p(get(r)), rk(r)) };
       }),
       (() => { const get = r => r.def.passEpa, p = pctFn(get, true); return { key: 'passEpa', label: 'Pass EPA allowed', n: true, title: 'Expected points added per dropback against this defense (higher = easier to throw on)', sort: get, cell: r => valCell(get(r), p(get(r)), null, sgn2) }; })(),
       (() => { const get = r => r.def.rushEpa, p = pctFn(get, true); return { key: 'rushEpa', label: 'Rush EPA allowed', n: true, title: 'Expected points added per designed run against this defense (higher = easier to run on)', sort: get, cell: r => valCell(get(r), p(get(r)), null, sgn2) }; })(),

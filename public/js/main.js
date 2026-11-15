@@ -1,5 +1,5 @@
 // App shell: router, header format controls, theme, data freshness, startup.
-import { S, detectMode, loadData, loadValues, loadLeague, persist, bump } from './store.js';
+import { S, detectMode, loadData, loadValues, loadLeague, persist, bump, tePremium } from './store.js';
 import { initTips, esc } from './ui.js';
 import * as rankings from './views/rankings.js';
 import * as analytics from './views/analytics.js';
@@ -12,6 +12,7 @@ import * as collegePlayer from './views/collegePlayer.js';
 import * as matchups from './views/matchups.js';
 import * as live from './views/live.js';
 import { anyLive } from './live.js';
+import { editCustomScoring } from './scoring.js';
 
 const app = document.getElementById('app');
 const banner = document.getElementById('banner');
@@ -61,7 +62,14 @@ function controls() {
     <select data-k="scoring" aria-label="Scoring">
       ${L ? `<option value="league" ${sc === 'league' ? 'selected' : ''}>League scoring</option>` : ''}
       <option value="ppr" ${sc === 'ppr' ? 'selected' : ''}>PPR</option><option value="half" ${sc === 'half' ? 'selected' : ''}>Half PPR</option><option value="std" ${sc === 'std' ? 'selected' : ''}>Standard</option>
+      ${S.settings.custom ? `<option value="custom" ${sc === 'custom' ? 'selected' : ''}>Custom scoring</option>` : ''}
+      <option value="edit">${S.settings.custom ? 'Edit custom scoring…' : 'Custom scoring…'}</option>
     </select>
+    ${(() => {
+      const tp = tePremium(), locked = sc === 'league' && L;
+      const opts = [...new Set([0, 0.5, 0.75, 1, tp])].sort((a, b) => a - b);
+      return `<select data-k="tep" aria-label="TE premium" title="${locked ? 'TE premium: set by your league' : 'TE premium: extra points per catch by a tight end'}" ${locked ? 'disabled' : ''}>${opts.map(v => `<option value="${v}" ${v === tp ? 'selected' : ''}>${v ? `TE +${v}` : 'No TE premium'}</option>`).join('')}</select>`;
+    })()}
     <select data-k="teams" aria-label="League size" ${L ? 'disabled' : ''}>${sizes.map(n => `<option value="${n}" ${S.settings.teams === n ? 'selected' : ''}>${n} teams</option>`).join('')}</select>
     <button class="icon-btn" data-k="theme" title="Theme: ${S.settings.theme}" aria-label="Toggle theme">${{ auto: '◐', light: '☀', dark: '☾' }[S.settings.theme]}</button>`;
 }
@@ -71,9 +79,19 @@ async function onControl(k, v) {
     S.settings.theme = { auto: 'light', light: 'dark', dark: 'auto' }[S.settings.theme];
     applyTheme(); persist(); controls(); return;
   }
-  if (k === 'qb') S.settings.qb = Number(v);
-  if (k === 'teams') S.settings.teams = Number(v);
-  if (k === 'scoring') S.settings.scoring = v;
+  if (k === 'scoring' && v === 'edit') {
+    // the editor saves your scoring and switches to it; cancelling puts the menu back
+    if (!(await editCustomScoring())) { controls(); return; }
+  } else {
+    if (k === 'qb') S.settings.qb = Number(v);
+    if (k === 'teams') S.settings.teams = Number(v);
+    if (k === 'scoring') S.settings.scoring = v;
+    if (k === 'tep') {
+      // one TE premium for the presets and your custom scoring (a linked league's scoring sets its own)
+      S.settings.tep = Number(v) || 0;
+      if (S.settings.custom) S.settings.custom = { ...S.settings.custom, bonus_rec_te: S.settings.tep };
+    }
+  }
   persist(); bump();
   app.style.opacity = '.6';
   try { await loadValues(); } finally { app.style.opacity = ''; }
@@ -156,7 +174,7 @@ async function start() {
     if (!(await waitForBuild())) { app.innerHTML = '<div class="empty">Data build failed — check the terminal running the server.</div>'; return; }
     await loadData();
   }
-  if (S.settings.scoring === 'league' && !S.leagueId) S.settings.scoring = 'ppr';
+  if ((S.settings.scoring === 'league' && !S.leagueId) || (S.settings.scoring === 'custom' && !S.settings.custom)) S.settings.scoring = 'ppr';
   if (S.leagueId) { try { await loadLeague(S.leagueId); } catch { S.leagueId = null; S.settings.scoring = S.settings.scoring === 'league' ? 'ppr' : S.settings.scoring; persist(); } }
   try { await loadValues(); }
   catch (e) { app.innerHTML = `<div class="empty">Couldn’t load dynasty market values (${esc(e.message)}).</div>`; return; }
