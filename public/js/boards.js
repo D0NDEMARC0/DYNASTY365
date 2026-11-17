@@ -31,19 +31,27 @@ export function parseBoard(text, list) {
   const aliasCount = new Map();
   for (const x of idx) if (x.alias) aliasCount.set(x.alias, (aliasCount.get(x.alias) || 0) + 1);
   const seen = new Set(), rows = [], unmatched = [];
+  const lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  // rookie mocks number picks round.pick ("1.05", "2.11"): an overall pick needs the picks per round, read from the
+  // highest pick number in the paste (12 if it can't tell)
+  const RP = /^(?:pick\s*)?(\d{1,2})\.(\d{2})\b/i;
+  const perRound = Math.min(32, Math.max(8, ...lines.map(s => Number(s.match(RP)?.[2] || 0)))) || 12;
+  const pickNum = s => {
+    const rp = s.match(RP);
+    if (rp) return (Number(rp[1]) - 1) * perRound + Number(rp[2]);
+    const m = s.match(/^(?:#|pick\s*|no\.\s*)?(\d{1,3})(?:[.)\]:\-\s]|$)/i);
+    return m ? Number(m[1]) : null;
+  };
   // mock-draft pages often put the pick number on its own line above the team and player
   let pending = null;
-  for (const raw of String(text || '').split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line) continue;
-    const alone = line.match(/^#?(\d{1,3})\.?$/);
-    if (alone) { pending = Number(alone[1]); continue; }
+  for (const line of lines) {
+    if (/^(?:#|pick\s*)?\d{1,3}(?:\.\d{2})?\.?$/i.test(line)) { pending = pickNum(line); continue; }
     const l = norm(line);
     let hit = idx.find(x => !seen.has(x.p) && l.includes(x.full));
     // "Ryan Williams" for "Ryan Coleman-Williams", or "Smith, Jeremiah"
     hit ||= idx.find(x => !seen.has(x.p) && ((x.alias && aliasCount.get(x.alias) === 1 && l.includes(x.alias)) || (x.rev && l.includes(x.rev))));
-    const num = line.match(/^#?(\d{1,3})(?:[.)\]:\-\s]|$)/);
-    if (hit) { seen.add(hit.p); rows.push({ p: hit.p, n: num ? Number(num[1]) : pending }); pending = null; }
+    const num = pickNum(line);
+    if (hit) { seen.add(hit.p); rows.push({ p: hit.p, n: num ?? pending }); pending = null; }
     else if (/[a-z]{2,}\s+[a-z'’.-]{2,}/i.test(line) && (num || /\b(QB|RB|WR|TE)\d*\b/.test(line))) unmatched.push(line.slice(0, 70));
   }
   const explicit = rows.length && rows.filter(r => r.n != null).length >= rows.length * 0.6;

@@ -77,7 +77,9 @@ export async function render(root, params, query) {
   const { board, used, nfl } = consensus(classList, { sf, history, boards, slots: meta.draftModel?.slots });
   nflOverride = nfl || null;
   const nflPickOf = p => (nfl ? nfl.get(p) ?? null : p.proj?.pick ?? null);
-  const nflBoards = boards.filter(b => b.kind === 'nfl');
+  const nflBoards = boards.filter(b => b.kind === 'nfl'), fantasyBoards = boards.filter(b => b.kind !== 'nfl');
+  // the same board without anything you pasted: how far your boards and mocks moved each player
+  const rank0 = boards.length ? new Map(consensus(classList, { sf, history, boards: [], slots: meta.draftModel?.slots }).board.map(x => [x.p, x.rank])) : null;
   const mockRank = new Map(board.map(x => [x.p, x.rank]));
   // your own board for this class (My board): the big board's order until you change it
   const byKey = new Map(classList.map(p => [pkey(p), p]));
@@ -156,7 +158,7 @@ export async function render(root, params, query) {
       <div class="bhead">
         <div>
           <h2 style="margin:0">Your boards</h2>
-          <p class="muted small" style="margin:4px 0 0">Paste a ranking or mock draft from any site you read (KeepTradeCut, Draft Sharks, Dynasty Nerds, Dynasty League Football, Footballguys, RotoBaller, a r/DynastyFF post, any ${st.cls} mock) and say which format it’s for. One board for your format (${esc(fmtName)}) counts as much as the online mock consensus, and two or three count up to twice as much; boards for another format count half, adjusted to yours (a 1QB board’s QBs move up in superflex; a board without TE premium moves tight ends up when you use TE premium). An NFL mock draft (Tankathon, NFL Draft Buzz…) marked as one sets the projected NFL picks, the NFL mock and how the big board reads draft capital. Mark a fantasy board as your base and the order starts from it (it counts about as much as everything else together), with the other signals still moving players. Each gets its own column; paste two or three and the board follows their consensus. These sites don’t allow apps to collect their rankings, so copy them yourself: they’re saved only in this browser.</p>
+          <p class="muted small" style="margin:4px 0 0">Paste a ranking or mock draft from any site you read (KeepTradeCut, Draft Sharks, Dynasty Nerds, Dynasty League Football, Footballguys, RotoBaller, a r/DynastyFF post, any ${st.cls} mock) and say which format it’s for. Paste several and they’re averaged: one board for your format (${esc(fmtName)}) counts as much as the online mock consensus, and each one you add counts more, up to three times as much with five or more (more than everything else together); boards for another format count half, adjusted to yours (a 1QB board’s QBs move up in superflex; a board without TE premium moves tight ends up when you use TE premium). NFL mock drafts (Tankathon, NFL Draft Buzz, NFL.com, CBS, ESPN…) marked as NFL mocks are averaged the same way into the projected NFL picks, one player per pick, which set the NFL mock and how the big board reads draft capital. Mark a fantasy board as your base and the order starts from it (it counts about as much as everything else together), with the other signals still moving players. Each gets its own column, plus an average column once you have two, and <b>Moved</b> shows how far they moved each player. These sites don’t allow apps to collect their rankings, so copy them yourself: they’re saved only in this browser.</p>
         </div>
         ${st.adding ? '' : '<button class="btn" data-act="addboard">+ Paste a board or mock</button>'}
       </div>
@@ -184,8 +186,24 @@ export async function render(root, params, query) {
     const posN = new Map(), cnt = {};
     for (const x of board) posN.set(x.p, (cnt[x.p.pos] = (cnt[x.p.pos] || 0) + 1));
     const list = board.filter(x => filterQ(x.p));
+    // average of the boards (or NFL mocks) you pasted that list him: geometric mean, so one outlier counts less
+    const gavg = (bs, p) => {
+      const r = bs.map(b => b.rank(p)).filter(v => v != null && v > 0);
+      return r.length ? { v: Math.exp(r.reduce((t, v) => t + Math.log(v), 0) / r.length), n: r.length } : null;
+    };
+    const avgCol = (label, bs, title) => (bs.length >= 2 ? [{ label, n: true, title, cell: x => {
+      const a = gavg(bs, x.p);
+      return `<td class="n">${a ? `${fmt1(a.v)} <span class="muted small">${a.n}/${bs.length}</span>` : '<span class="muted">—</span>'}</td>`;
+    } }] : []);
+    const moved = x => {
+      const r0 = rank0?.get(x.p);
+      if (r0 == null) return '<td class="n"><span class="muted">new</span></td>';
+      const d = r0 - x.rank;
+      return `<td class="n" title="#${r0} without your pasted boards and mocks">${d > 0 ? `<span class="up">▲${d}</span>` : d < 0 ? `<span class="down">▼${-d}</span>` : '<span class="muted">–</span>'}</td>`;
+    };
     const cols = [
       { label: '#', n: true, cell: x => `<td class="rank">${x.rank}</td>` },
+      ...(rank0 ? [{ label: 'Moved', n: true, title: 'How far your pasted boards and mocks moved him on this board (vs. the board without them)', cell: moved }] : []),
       { label: 'Player', cell: x => `<td>${playerCell(x.p)}</td>` },
       { label: 'Pos', title: 'Position rank on this board', cell: x => `<td>${posTag(x.p.pos)}<span class="small"> ${posN.get(x.p)}</span></td>` },
       ...(pre ? [
@@ -204,7 +222,9 @@ export async function render(root, params, query) {
       ...(classList.some(p => p.pc) ? [{ label: 'Pro comp', title: COMP_TITLE, cell: x => compCell(x.p) }] : []),
       ...(hasEcr ? [{ label: 'Experts', n: true, title: 'FantasyPros dynasty rookie rankings (expert consensus rank)', cell: x => `<td class="n">${x.p.ecr ? fmt1(x.p.ecr.rank) : '—'}</td>` }] : []),
       ...(hasAdp ? [{ label: 'ADP', n: true, title: 'Sleeper ADP from real drafts', cell: x => `<td class="n">${adpOf(x.p) != null ? fmt1(adpOf(x.p)) : '—'}</td>` }] : []),
-      ...boards.map(b => ({ label: esc(b.name), n: true, title: `Rank on your pasted ${b.name} board`, cell: x => `<td class="n">${b.rank(x.p) ?? '<span class="muted">—</span>'}</td>` })),
+      ...avgCol('Boards avg', fantasyBoards, 'Average rank across your pasted fantasy boards and rookie mocks that list him (and how many do). They’re averaged into one signal that counts more the more boards you paste'),
+      ...avgCol('Mocks avg', nflBoards, 'Average pick across your pasted NFL mock drafts that list him (and how many do). They set his projected NFL pick, which counts more the more mocks you paste; each player gets his own pick'),
+      ...boards.map(b => ({ label: esc(b.name), n: true, title: `${b.kind === 'nfl' ? 'Pick in' : 'Rank on'} your pasted ${b.name} ${b.kind === 'nfl' ? 'NFL mock' : 'board'}`, cell: x => `<td class="n">${b.rank(x.p) ?? '<span class="muted">—</span>'}</td>` })),
     ];
     const tierOf = r => (r <= teams * 4 ? Math.ceil(r / teams) : 5);
     const tierLabel = t => (t <= 4 ? `${ordinal(t)}-round rookie picks · ${(t - 1) * teams + 1}–${t * teams} in a ${teams}-team league` : 'Deeper prospects');

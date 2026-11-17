@@ -65,21 +65,25 @@ function capitalCurves(history) {
 
 /**
  * Projected NFL picks with NFL mock drafts you pasted (Tankathon, NFL Draft Buzz…) as the baseline: a player they list
- * is projected at their average pick, blended 70/30 (log scale) with the app's own projection (the online mock
- * consensus); one they leave out goes after everyone they list, unless the app already has him later. Then the same
- * pacing by position as the app's projections (slots: where the k-th at each position went in recent drafts) and one
- * player per pick. Returns Map(player -> pick).
+ * is projected at their average pick (geometric mean), blended on a log scale with the app's own projection (the
+ * online mock consensus), which gets less say the more of your mocks list him: 1 mock 67/33, 2 80/20, 3 86/14, 5 91/9.
+ * One they leave out goes after everyone they list, unless the app already has him later. Then the same
+ * pacing by position as the app's projections (slots: where the k-th at each position went in recent drafts), which
+ * pulls less the more of your mocks list him (35% for one, 18% for two, 12% for three), and one player per pick.
+ * Returns Map(player -> pick).
  */
 export function nflProjections(list, nflBoards, slots = {}) {
-  const LAST = 257, est = new Map();
+  const LAST = 257, est = new Map(), nMocks = new Map();
   let lastListed = 0;
   for (const p of list) {
     if (p.draft) continue;
     const picks = nflBoards.map(b => b.rank(p)).filter(v => v != null && v > 0);
     if (!picks.length) continue;
+    nMocks.set(p, picks.length);
     const avg = Math.exp(picks.reduce((t, v) => t + Math.log(v), 0) / picks.length);
     lastListed = Math.max(lastListed, avg);
-    est.set(p, p.proj?.pick ? Math.exp(0.7 * Math.log(avg) + 0.3 * Math.log(p.proj.pick)) : avg);
+    const w = picks.length / (picks.length + 0.5);
+    est.set(p, p.proj?.pick ? Math.exp(w * Math.log(avg) + (1 - w) * Math.log(p.proj.pick)) : avg);
   }
   const past = Math.max(33, lastListed + 1);
   for (const p of list) if (!p.draft && !est.has(p) && p.proj?.pick) est.set(p, Math.max(p.proj.pick, past + p.proj.pick / 4));
@@ -89,7 +93,9 @@ export function nflProjections(list, nflBoards, slots = {}) {
     const sl = slots[pos] || [];
     arr.sort((a, b) => est.get(a) - est.get(b)).forEach((p, k) => {
       const floor = k < sl.length ? sl[k] : LAST;
-      if (k > 0 && floor > est.get(p)) est.set(p, Math.exp(0.65 * Math.log(est.get(p)) + 0.35 * Math.log(floor)));
+      // the more of your mocks agree on him, the less the pacing second-guesses them
+      const pull = 0.35 / (nMocks.get(p) || 1);
+      if (k > 0 && floor > est.get(p)) est.set(p, Math.exp((1 - pull) * Math.log(est.get(p)) + pull * Math.log(floor)));
     });
   }
   const out = new Map(), taken = new Set();
@@ -104,7 +110,8 @@ export function nflProjections(list, nflBoards, slots = {}) {
 
 /**
  * Consensus order for a class, led by what people outside this app say: online NFL mock drafts and boards you pasted
- * (weight 1.6 each; the mocks 0.8 once you've pasted fantasy rankings, since they rank for the NFL draft), real
+ * (weight 1.6 each; the mocks 0.8 once you've pasted fantasy rankings, since they rank for the NFL draft; several
+ * pasted boards, or several pasted NFL mocks, are averaged and count more the more there are), real
  * rookie-draft ADP (0.4), dynasty market value (0.3) and expert rankings (0.25). Our own models fill in behind them: the
  * expert-style projection (0.35), the projected NFL draft position (0.3), the Prospect Score (0.15) and the college
  * profile (0.5: production, breakout, age and recruiting without draft capital). Each signal becomes a slot within the class; the slots are blended by a weighted geometric mean,
@@ -164,8 +171,10 @@ export function consensus(list, { sf, tePts = tePremium(), history = [], boards 
     return v.length >= 2 ? v.reduce((a, b) => a + b, 0) / v.length : null;
   };
   const profileSlot = onCurve(p => (p.draft || profile(p) == null ? null : -profile(p)));
-  // the NFL mocks rank players for the NFL draft; once you've pasted fantasy rankings they count less
-  const mockW = W.mock ?? (boards.length ? 0.8 : 1.6);
+  // the NFL mocks rank players for the NFL draft; once you've pasted fantasy rankings they count less. NFL mocks you
+  // pasted are averaged into one signal that counts more the more of them there are: 1 as much as the online
+  // consensus, 2 1.5×, 3 2×, 4 or more 2.5×.
+  const mockW = (W.mock ?? (boards.length ? 0.8 : 1.6)) * (nflBoards.length ? Math.min(2.5, 1 + 0.5 * (nflBoards.length - 1)) : 1);
   // Online NFL mock-draft consensus (Pro Football Network's Mock Draft Index: the latest mocks' first round, weighted
   // 3:1 over the season-long top 40), as his projected NFL pick (spaced by position and one player per pick, see
   // pipeline/college.mjs). Half: where players at his position taken at that pick go in rookie drafts in this format
@@ -194,11 +203,13 @@ export function consensus(list, { sf, tePts = tePremium(), history = [], boards 
     return a;
   };
   const boardW = b => ((b.qb && b.qb !== yourFmt) || !!b.tep !== tepOn ? 0.5 : 1);
-  // one board for your format counts as much as the online mock consensus; two count 1.5×, three or more twice as much.
-  // A board you mark as your base counts three times as much as your other boards, and your boards then count about as
-  // much as every other signal together: the order starts from it, and the rest still move players up or down.
+  // Your boards and rookie mocks are averaged (geometric mean of their ranks) into one signal that counts more the more
+  // of them there are: one board for your format as much as the online mock consensus, two 1.5×, three 2×, four 2.5×,
+  // five or more 3× (more than every other signal together). A board you mark as your base counts three times as much
+  // as your other boards, and your boards then count at least about as much as every other signal together: the order
+  // starts from it, and the rest still move players up or down.
   const based = boards.some(b => b.base);
-  const boardsWeight = based ? 3.5 : 1.6 * Math.min(2, 0.5 + 0.5 * boards.reduce((t, b) => t + boardW(b), 0));
+  const boardsWeight = Math.max(based ? 3.5 : 0, 1.6 * Math.min(3, 0.5 + 0.5 * boards.reduce((t, b) => t + boardW(b), 0)));
   const yours = p => {
     let n = 0, d = 0;
     for (const b of boards) {
@@ -223,7 +234,8 @@ export function consensus(list, { sf, tePts = tePremium(), history = [], boards 
     { label: 'expert-style projection (on the market’s positional curve)', w: 0.35, m: onCurve(p => (p.ecr ? null : p.xecr ?? null), fmtAdj) },
     // before the NFL Draft: where the draft-capital model projects him in the real draft (players it projects as
     // undrafted come after everyone it projects to be picked)
-    { label: 'projected NFL draft position', w: 0.3, m: rankBy(p => (p.draft || !p.proj ? null : p.proj.pick ?? 300 + p.proj.rank), true), adj: teAdj },
+    // (your pasted NFL mocks' projection when you have them)
+    { label: 'projected NFL draft position', w: 0.3, m: rankBy(p => (p.draft ? null : nflMap?.get(p) ?? (!p.proj ? null : nflMap ? 300 + (p.proj.rank || 0) : p.proj.pick ?? 300 + p.proj.rank)), true), adj: teAdj },
     { label: Object.keys(curves).length ? 'Prospect Score (on the market’s positional curve)' : 'Prospect Score', w: 0.15, m: scoreSlot },
     { label: 'college profile: production, breakout, age, recruiting (on the market’s positional curve)', w: W.profile ?? 0.5, m: profileSlot },
   ];
