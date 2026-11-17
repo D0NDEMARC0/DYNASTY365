@@ -128,7 +128,7 @@ export const M = {
   rypc: { label: 'Rush YPC', fmt: d2, desc: 'Rushing yards per attempt (official, includes scrambles and kneel-downs)', src: 'nflverse' },
   scr: { label: 'Scrambles', fmt: int, desc: 'QB scrambles', src: 'nflverse' },
   dbpg: { label: 'DB/G', fmt: d1, desc: 'Dropbacks per game', src: 'nflverse' },
-  score: { label: 'Score', fmt: v => (v == null ? '—' : String(v)), desc: 'Analytics Score (0–100): weighted percentile blend of the position’s most predictive metrics', src: 'Dynasty Lab' },
+  score: { label: 'Score', fmt: v => (v == null ? '—' : String(v)), desc: 'Analytics Score (0–100): weighted percentile blend of the position’s most predictive metrics', src: 'Dynasty 365' },
 };
 
 export const LOWER_BETTER = new Set(['drop', 'stuff', 'skr', 'twp', 'press', 'bad', 'contMan', 'contZone']);

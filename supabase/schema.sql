@@ -1,4 +1,4 @@
--- Dynasty Lab accounts: one private row per account holding everything the app saves for you
+-- Dynasty 365 accounts: one private row per account holding everything the app saves for you
 -- (settings, linked Sleeper league, your rankings and the boards you pasted).
 -- Run once in your Supabase project: SQL Editor -> New query -> paste -> Run.
 

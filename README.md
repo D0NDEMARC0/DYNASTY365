@@ -1,4 +1,4 @@
-# Dynasty Lab
+# Dynasty 365
 
 A local dynasty fantasy football app that combines advanced analytics (YPRR, targets per route, separation,
 YAC over expected, explosive-run rate, rush yards over expected, yards after contact, EPA, CPOE…) with real stats,

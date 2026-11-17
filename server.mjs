@@ -1,4 +1,4 @@
-// Dynasty Lab local server: static UI + data files + dynasty market values API.
+// Dynasty 365 local server: static UI + data files + dynasty market values API.
 // Usage: node server.mjs   (then open http://localhost:5178)
 import http from 'node:http';
 import fs from 'node:fs';
@@ -112,6 +112,6 @@ const server = http.createServer(async (req, res) => {
 autoUpdate();
 setInterval(autoUpdate, 15 * 60e3);
 server.listen(PORT, () => {
-  console.log(`Dynasty Lab running at http://localhost:${PORT}`);
+  console.log(`Dynasty 365 running at http://localhost:${PORT}`);
   console.log(`[data] Auto-update: every ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][UPDATE_DAY]} at ${UPDATE_HOUR}:00 — next ${nextCutoff().toLocaleString()}`);
 });
