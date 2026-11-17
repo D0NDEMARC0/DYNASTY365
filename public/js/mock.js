@@ -40,13 +40,37 @@ function positionalCurves(history) {
 }
 
 /**
+ * How NFL draft capital turns into rookie-draft position, per position, in this format: past classes' players ranked
+ * within their class by current dynasty value, fit as log(rank) ~ log(NFL pick). A deep QB class doesn't push its 7th
+ * QB to where 7th QBs usually go: a QB taken around pick 25 is valued like one, however many QBs go before him.
+ */
+function capitalCurves(history) {
+  const classes = {};
+  for (const p of history) if (market(p) && p.draft?.p) (classes[p.draftClass] ||= []).push(p);
+  const pts = {};
+  for (const cls of Object.values(classes)) {
+    cls.sort((a, b) => market(b) - market(a)).forEach((p, i) => (pts[p.pos] ||= []).push([Math.log(p.draft.p), Math.log(i + 1)]));
+  }
+  const fits = {};
+  for (const [pos, a] of Object.entries(pts)) {
+    if (a.length < 8) continue;
+    const mx = a.reduce((s, x) => s + x[0], 0) / a.length, my = a.reduce((s, x) => s + x[1], 0) / a.length;
+    let sxy = 0, sxx = 0;
+    for (const [x, y] of a) { sxy += (x - mx) * (y - my); sxx += (x - mx) ** 2; }
+    const b = sxx ? sxy / sxx : 0;
+    fits[pos] = { a: my - b * mx, b };
+  }
+  return fits;
+}
+
+/**
  * Consensus order for a class, led by what people outside this app say: online NFL mock drafts and boards you pasted
  * (weight 1.6 each; the mocks 0.8 once you've pasted fantasy rankings, since they rank for the NFL draft), real
  * rookie-draft ADP (0.4), dynasty market value (0.3) and expert rankings (0.25). Our own models fill in behind them: the
  * expert-style projection (0.35), the projected NFL draft position (0.3), the Prospect Score (0.15) and the college
  * profile (0.5: production, breakout, age and recruiting without draft capital). Each signal becomes a slot within the class; the slots are blended by a weighted geometric mean,
  * re-normalized to whatever exists for each player. For a player the community has ranked, the models can move him
- * at most 3× either way from that ranking. Position-neutral signals are mapped onto the market's positional curve:
+ * at most 2× either way from that ranking. Position-neutral signals are mapped onto the market's positional curve:
  * the 2nd-best RB by score takes about the slot where 2nd RBs usually go in this format.
  * TE premium works the same way: the curve comes from FantasyCalc's TE-premium market values, and every ranking made
  * without TE premium (the NFL mocks, expert ranks, ADP, projected NFL picks, boards you pasted for no TE premium)
@@ -100,16 +124,19 @@ export function consensus(list, { sf, tePts = tePremium(), history = [], boards 
   // the NFL mocks rank players for the NFL draft; once you've pasted fantasy rankings they count less
   const mockW = W.mock ?? (boards.length ? 0.8 : 1.6);
   // Online NFL mock-draft consensus (Pro Football Network's Mock Draft Index: the latest mocks' first round, weighted
-  // 3:1 over the season-long top 40; p.mock.est is the NFL pick that implies). Its order among QB/RB/WR/TE goes on the
-  // positional curve, so in 1QB the 9th QB it lists isn't a top-10 rookie pick. Players it doesn't list come after
-  // everyone it does.
-  const mocked = list.filter(p => p.mock && !p.draft).sort((a, b) => (a.mock.est ?? a.mock.rank) - (b.mock.est ?? b.mock.rank));
+  // 3:1 over the season-long top 40), as his projected NFL pick (spaced by position and one player per pick, see
+  // pipeline/college.mjs). Half: where players at his position taken at that pick go in rookie drafts in this format
+  // (capitalCurves); half: his place in the mocks' overall order. Players the mocks don't list come after everyone
+  // they do.
+  const capital = capitalCurves(history);
+  const capSlot = (pos, pick) => { const f = capital[pos]; return f ? Math.exp(f.a + f.b * Math.log(Math.max(1, pick))) : pick; };
+  const nflPick = p => p.proj?.pick ?? p.mock?.est ?? null;
+  const mocked = list.filter(p => p.mock && !p.draft && nflPick(p) != null).sort((a, b) => nflPick(a) - nflPick(b));
   const mockSlots = new Map();
   if (mocked.length) {
-    const k = {};
-    // NFL mocks know nothing of TE premium: their overall half moves tight ends up (the curve half already has it)
-    mocked.forEach((p, i) => mockSlots.set(p, curveSlot(p.pos, (k[p.pos] = (k[p.pos] || 0) + 1) - 1, (i + 1) * teAdj(p))));
-    for (const p of list) if (!p.draft && !p.mock) mockSlots.set(p, curveSlot(p.pos, k[p.pos] || 0, (mocked.length + 30) * teAdj(p)));
+    // NFL mocks know nothing of TE premium: their overall half moves tight ends up (the capital half already has it)
+    mocked.forEach((p, i) => mockSlots.set(p, 0.5 * capSlot(p.pos, nflPick(p)) + 0.5 * (i + 1) * teAdj(p)));
+    for (const p of list) if (!p.draft && !p.mock) mockSlots.set(p, 0.5 * capSlot(p.pos, Math.max(70, nflPick(p) ?? 120)) + 0.5 * (mocked.length + 30) * teAdj(p));
   }
   // boards you pasted (KeepTradeCut, Draft Sharks, Dynasty Nerds, Reddit…): their ranks for the player, adjusted to
   // your format when a board was made for another one (which then counts half). A board that doesn't say is taken as
@@ -164,14 +191,17 @@ export function consensus(list, { sf, tePts = tePremium(), history = [], boards 
     for (const s of signals) { const r = s.community?.(p) ? slotOf(s, p) : null; if (r != null) { cn += Math.log(r) * s.w; cd += s.w; } }
     const anchor = cd ? Math.exp(cn / cd) : null;
     let num = 0, den = 0;
+    const parts = []; // each source's slot for him and its weight, to show how his rank was built
     for (const s of signals) {
       let r = slotOf(s, p);
       if (r == null) continue;
-      if (!s.community && anchor) r = Math.min(anchor * 3, Math.max(anchor / 3, r));
+      // our models stay secondary: at most 2× either way from what outside sources say
+      if (!s.community && anchor) r = Math.min(anchor * 2, Math.max(anchor / 2, r));
       num += Math.log(r) * s.w; den += s.w;
+      parts.push({ label: s.label, slot: r, w: s.w });
     }
     if (!den) continue;
-    out.push({ p, slot: Math.exp(num / den) });
+    out.push({ p, slot: Math.exp(num / den), parts });
   }
   out.sort((a, b) => a.slot - b.slot);
   out.forEach((x, i) => { x.rank = i + 1; });

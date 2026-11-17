@@ -754,6 +754,29 @@ export async function buildCollege({ current, nflBy, gsis2sid, out, log, private
         const pick = est != null && est <= LAST_PICK ? est : null;
         p.proj = { ...p.proj, pick, round: pick ? Math.min(7, Math.ceil(pick / 32)) : null, model };
       }
+      // Positions go at a pace: drafts rarely take more than 3-5 QBs in round 1. The k-th player at a position (by
+      // projected pick) is pulled 35% of the way (log scale) toward where the k-th at his position has gone in recent
+      // drafts, when that's later. Deep classes still put more players early; ten first-round QBs don't happen.
+      for (const pos of SKILL) {
+        const slots = posSlots[pos] || [];
+        inClass.filter(p => p.pos === pos && p.proj.pick != null).sort((a, b) => a.proj.pick - b.proj.pick || b.ev - a.ev).forEach((p, k) => {
+          const floor = k < slots.length ? slots[k] : LAST_PICK;
+          // the first at each position keeps the mocks' pick (a unanimous #1 WR stays #1)
+          if (k > 0 && floor > p.proj.pick) p.proj.pick = Math.exp(0.65 * Math.log(p.proj.pick) + 0.35 * Math.log(floor));
+        });
+      }
+    }
+    // one player per pick: a tie goes to the earlier projection, then the higher draft value, and the next player
+    // takes the next open pick
+    const taken = new Set();
+    for (const p of inClass.filter(x => x.proj.pick != null).sort((a, b) => a.proj.pick - b.proj.pick || b.ev - a.ev)) {
+      let k = Math.max(1, Math.round(p.proj.pick));
+      while (taken.has(k)) k++;
+      taken.add(k);
+      p.proj.pick = k <= LAST_PICK ? k : null;
+      p.proj.round = p.proj.pick ? Math.min(7, Math.ceil(p.proj.pick / 32)) : null;
+    }
+    if (cls === upcoming && hasMocks) {
       for (const pos of SKILL) {
         inClass.filter(p => p.pos === pos).sort((a, b) => (a.proj.pick ?? 999) - (b.proj.pick ?? 999) || b.ev - a.ev).forEach((p, k) => { p.proj.posRank = k + 1; });
       }

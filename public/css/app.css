@@ -459,3 +459,10 @@ table.data.box th.grp { font-size: 13px; color: var(--accent-ink); }
   nav.tabs::-webkit-scrollbar { display: none; }
   nav.tabs a.on::after { bottom: 0; }
 }
+
+/* NFL mock (Prospects): pick number, team with its record, player */
+.lineup .slot.nflpick { grid-template-columns: 48px 118px minmax(0, 1fr); padding: 8px 0; }
+.lineup .slot.nflpick .sl { font-family: var(--display); font-size: 20px; line-height: 1; color: var(--ink); }
+.lineup .slot.nflpick .sl .muted { font-size: 11px; }
+.nflteam { display: flex; align-items: center; gap: 6px; font-family: var(--display); font-size: 16px; letter-spacing: .03em; }
+.nflteam img { width: 26px; height: 26px; object-fit: contain; }

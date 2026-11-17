@@ -5,12 +5,18 @@ import { consensus, genericSlots, leagueSlots, runMock } from '../mock.js';
 import { userBoards, addBoard, removeBoard, updateBoard, pkey } from '../boards.js';
 import { classBoard, setClassBoard, clearClassBoard, complete } from '../myranks.js';
 import { rankEditor } from './rankEditor.js';
+import { fetchData } from '../version.js';
 import { ordinal } from '../model.js';
 import { esc, fmtInt, fmt1, heat, posTag, table, sortRows, nameMatch } from '../ui.js';
 import { mount } from './common.js';
 
 const st = { cls: null, view: null, pos: 'ALL', q: '', sort: 'mock', dir: 'asc', limit: 150, rounds: 4, mockSrc: 'league', mockBoard: 'mine', adding: false, msg: '' };
-const VIEWS = ['board', 'mine', 'rankings', 'mock'];
+const VIEWS = ['board', 'mine', 'rankings', 'mock', 'nfl'];
+// the real NFL draft order from this season's records (pipeline/draftorder.mjs), loaded once
+let orderP = null;
+const loadOrder = () => (orderP ||= fetchData('data/draftorder.json').then(r => (r.ok ? r.json() : null)).catch(() => null));
+// nflverse team codes -> Sleeper's logo names
+const logo = t => `https://sleepercdn.com/images/team_logos/nfl/${({ LA: 'lar' }[t] || t).toLowerCase()}.png`;
 // other public boards, for comparison (links only — their content isn't copied into this app)
 const OTHER_BOARDS = [
   ['PFN mock draft index', cls => `https://www.profootballnetwork.com/nfl-draft-hq/mock-draft-index?year=${cls}`],
@@ -103,7 +109,7 @@ export async function render(root, params, query) {
     </div></div>
     <div class="toolbar">
       <div class="seg" data-k="cls">${classes.map(c => `<button data-v="${c}" class="${c === st.cls ? 'on' : ''}">${c}${meta.classes[c].status !== 'drafted' ? ' ★' : ''}</button>`).join('')}</div>
-      <div class="seg" data-k="view">${viewBtn('board', 'Big board')}${viewBtn('mine', 'My board')}${viewBtn('rankings', 'Rankings')}${viewBtn('mock', 'Mock draft')}</div>
+      <div class="seg" data-k="view">${viewBtn('board', 'Big board')}${viewBtn('mine', 'My board')}${viewBtn('rankings', 'Rankings')}${viewBtn('mock', 'Mock draft')}${pre ? viewBtn('nfl', 'NFL mock') : ''}</div>
       ${st.view !== 'mock'
         ? `<div class="seg" data-k="pos">${['ALL', 'QB', 'RB', 'WR', 'TE'].map(p => `<button data-v="${p}" class="${st.pos === p ? 'on' : ''}">${p === 'ALL' ? 'All' : p}</button>`).join('')}</div>
            <input type="search" placeholder="Search player or school" value="${esc(st.q)}" data-k="q">`
@@ -296,7 +302,31 @@ export async function render(root, params, query) {
       <button class="linkbtn" data-act="mine-reset">Start over from the big board</button><button class="linkbtn" data-act="mine-clear">Delete my board</button>`;
   };
 
-  const draw = () => (st.view === 'mock' ? drawMock() : st.view === 'board' ? drawBoard() : st.view === 'mine' ? drawMine() : drawRankings());
+  // ---------- NFL mock: the class's QBs, RBs, WRs and TEs at their projected NFL picks, with the real draft order ----------
+  const drawNfl = async () => {
+    const more = el.querySelector('[data-more]');
+    body.innerHTML = '<div class="empty"><span class="spinner"></span> Loading the draft order…</div>';
+    more.innerHTML = '';
+    const order = await loadOrder();
+    if (!order?.teams?.length) { body.innerHTML = '<div class="empty">The NFL draft order isn’t available yet (it’s built from this season’s results).</div>'; return; }
+    const N = order.teams.length, maxRound = st.nflAll ? 7 : 3;
+    const picks = classList.filter(p => !p.draft && p.proj?.pick && p.proj.pick <= N * maxRound && filterQ(p)).sort((a, b) => a.proj.pick - b.proj.pick);
+    const src = p => (p.mock?.recent != null ? `mocks: #${Math.round(p.mock.recent)} in ${p.mock.recentN} of the latest ${p.mock.recentM}`
+      : p.mock ? `mocks: season-long #${p.mock.rank}` : 'draft model (not in the online mocks)');
+    const rec = t => `${t.w}-${t.l}${t.t ? `-${t.t}` : ''}`;
+    const rounds = [...new Set(picks.map(p => Math.ceil(p.proj.pick / N)))];
+    body.innerHTML = `
+      <p class="muted small" style="margin:0 0 10px">The ${order.draft} NFL draft if the season ended today: draft order from ${order.season} records through week ${order.week} (worst record first; ties go to the easier schedule), the same order every round. Only QBs, RBs, WRs and TEs are shown; the picks in between go to other positions. Each player sits at his projected NFL pick: the latest online mocks, spaced so a position can’t take more of a round than drafts usually give it, one player per pick. Traded and compensatory picks aren’t modeled.</p>
+      ${rounds.map(r => `<div class="card"><h2>Round ${r}</h2><div class="lineup">${picks.filter(p => Math.ceil(p.proj.pick / N) === r).map(p => {
+        const slot = (p.proj.pick - 1) % N, t = order.teams[slot];
+        return `<div class="slot nflpick"><span class="sl">${p.proj.pick}<br><span class="muted">${r}.${String(slot + 1).padStart(2, '0')}</span></span>
+          <span class="nflteam"><img src="${esc(logo(t.team))}" alt="" width="26" height="26" loading="lazy" onerror="this.style.visibility='hidden'"><b>${esc(t.team)}</b><span class="muted small">${rec(t)}</span></span>
+          <div>${playerCell(p)}<div class="muted small" style="margin-top:2px">${esc(src(p))}${p.score != null ? ` · score ${p.score}` : ''}</div></div></div>`;
+      }).join('')}</div></div>`).join('') || '<div class="empty">No players match.</div>'}`;
+    more.innerHTML = `<button class="btn" data-act="nflall">${st.nflAll ? 'Show rounds 1–3' : 'Show all 7 rounds'}</button>`;
+  };
+
+  const draw = () => (st.view === 'mock' ? drawMock() : st.view === 'nfl' ? drawNfl() : st.view === 'board' ? drawBoard() : st.view === 'mine' ? drawMine() : drawRankings());
   draw();
 
   el.addEventListener('click', e => {
@@ -306,6 +336,7 @@ export async function render(root, params, query) {
     if (act) {
       const a = act.dataset.act;
       if (a === 'more') { st.limit += 150; draw(); return; }
+      if (a === 'nflall') { st.nflAll = !st.nflAll; draw(); return; }
       if (a === 'mine-start' || a === 'mine-reset') {
         if (a === 'mine-reset' && !confirm('Replace your board with the big board’s order?')) return;
         setClassBoard(st.cls, board.map(x => pkey(x.p)), tep > 0); st.mockBoard = 'mine'; draw(); return;

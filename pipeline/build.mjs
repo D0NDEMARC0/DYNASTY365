@@ -9,6 +9,7 @@ import { scoreSeason, blendScores, MODEL } from './score.mjs';
 import { loadImports, applyImport, nameKey } from './imports.mjs';
 import { buildCollege } from './college.mjs';
 import { teamSeason, assembleTeams } from './teams.mjs';
+import { draftOrder } from './draftorder.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(__dirname, '..', 'data', 'out');
@@ -216,6 +217,11 @@ fs.writeFileSync(path.join(OUT, 'idmap.json'), JSON.stringify({ fp2sid }));
 const teamsOut = assembleTeams(teamStats, CURRENT);
 fs.writeFileSync(path.join(OUT, 'teams.json'), JSON.stringify({ ...teamsOut, generated: new Date().toISOString() }));
 log(`Team matchups: ${Object.keys(teamsOut.teams).length} teams (${teamsOut.season}; coverage ${teamsOut.covSeason ?? '—'}, pressure ${teamsOut.pressSeason ?? '—'})`);
+// NFL draft order from this season's records, for the real-life NFL mock draft on the Prospects page
+try {
+  const order = await draftOrder(CURRENT, log);
+  if (order) fs.writeFileSync(path.join(OUT, 'draftorder.json'), JSON.stringify(order));
+} catch (e) { log('  draft order unavailable this run:', e.message); }
 // ---------- college football + prospects ----------
 try {
   log('College football & prospects…');

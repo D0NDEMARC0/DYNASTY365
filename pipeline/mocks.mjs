@@ -73,9 +73,11 @@ export function mockEstimate({ season, recent }) {
   for (const [k, a] of acc) out.set(k, { ...(out.get(k) || { name: a.name, pos: a.pos }), recent: a.s / a.n, recentN: a.n, recentM: recent.mocks, picks: a.picks });
   const seasonEnd = Math.max(40, season.length);
   for (const v of out.values()) {
-    const r = v.recent ?? (recent.mocks ? 32 + (v.rank ?? seasonEnd) / 2 : null);
     const s = v.rank ?? seasonEnd + 1;
-    v.est = r == null ? s : Math.exp(0.75 * Math.log(r) + 0.25 * Math.log(s));
+    // left out of the latest mocks' first round: a second-rounder, in season-long order (a high season-long rank
+    // used to pull such players back into round 1, which put ten QBs there)
+    if (v.recent == null && recent.mocks) { v.est = 32 + s / 2; continue; }
+    v.est = v.recent == null ? s : Math.exp(0.75 * Math.log(v.recent) + 0.25 * Math.log(s));
   }
   return out;
 }
