@@ -31,15 +31,19 @@ export function parseBoard(text, list) {
   const aliasCount = new Map();
   for (const x of idx) if (x.alias) aliasCount.set(x.alias, (aliasCount.get(x.alias) || 0) + 1);
   const seen = new Set(), rows = [], unmatched = [];
+  // mock-draft pages often put the pick number on its own line above the team and player
+  let pending = null;
   for (const raw of String(text || '').split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
+    const alone = line.match(/^#?(\d{1,3})\.?$/);
+    if (alone) { pending = Number(alone[1]); continue; }
     const l = norm(line);
     let hit = idx.find(x => !seen.has(x.p) && l.includes(x.full));
     // "Ryan Williams" for "Ryan Coleman-Williams", or "Smith, Jeremiah"
     hit ||= idx.find(x => !seen.has(x.p) && ((x.alias && aliasCount.get(x.alias) === 1 && l.includes(x.alias)) || (x.rev && l.includes(x.rev))));
     const num = line.match(/^#?(\d{1,3})(?:[.)\]:\-\s]|$)/);
-    if (hit) { seen.add(hit.p); rows.push({ p: hit.p, n: num ? Number(num[1]) : null }); }
+    if (hit) { seen.add(hit.p); rows.push({ p: hit.p, n: num ? Number(num[1]) : pending }); pending = null; }
     else if (/[a-z]{2,}\s+[a-z'’.-]{2,}/i.test(line) && (num || /\b(QB|RB|WR|TE)\d*\b/.test(line))) unmatched.push(line.slice(0, 70));
   }
   const explicit = rows.length && rows.filter(r => r.n != null).length >= rows.length * 0.6;
@@ -59,12 +63,13 @@ export function userBoards(cls, list) {
   });
 }
 
-export function addBoard(cls, name, text, list, { qb = '', tep = false, base = false } = {}) {
+/** kind: 'fantasy' (a ranking or rookie mock: the big board) or 'nfl' (an NFL mock draft: the projected NFL picks). */
+export function addBoard(cls, name, text, list, { qb = '', tep = false, base = false, kind = 'fantasy' } = {}) {
   const res = parseBoard(text, list);
   if (!res.matched) return { error: `No ${cls} prospects found in that text. Paste one player per line, e.g. “1. Jeremiah Smith WR Ohio State”.` };
   const all = read();
   const count = (all[cls]?.length || 0) + (mem[cls]?.length || 0);
-  const b = { id: Date.now().toString(36), name: String(name || '').trim().slice(0, 32) || `Board ${count + 1}`, date: new Date().toISOString().slice(0, 10), text: String(text).slice(0, 60000), qb: ['1', '2'].includes(qb) ? qb : '', tep: !!tep, base: !!base };
+  const b = { id: Date.now().toString(36), name: String(name || '').trim().slice(0, 32) || `Board ${count + 1}`, date: new Date().toISOString().slice(0, 10), text: String(text).slice(0, 60000), qb: ['1', '2'].includes(qb) ? qb : '', tep: !!tep, base: !!base, kind: kind === 'nfl' ? 'nfl' : 'fantasy' };
   (all[cls] ||= []).push(b);
   if (write(all)) return { board: b, res };
   (mem[cls] ||= []).push(b);

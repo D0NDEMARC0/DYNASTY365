@@ -64,6 +64,45 @@ function capitalCurves(history) {
 }
 
 /**
+ * Projected NFL picks with NFL mock drafts you pasted (Tankathon, NFL Draft Buzz…) as the baseline: a player they list
+ * is projected at their average pick, blended 70/30 (log scale) with the app's own projection (the online mock
+ * consensus); one they leave out goes after everyone they list, unless the app already has him later. Then the same
+ * pacing by position as the app's projections (slots: where the k-th at each position went in recent drafts) and one
+ * player per pick. Returns Map(player -> pick).
+ */
+export function nflProjections(list, nflBoards, slots = {}) {
+  const LAST = 257, est = new Map();
+  let lastListed = 0;
+  for (const p of list) {
+    if (p.draft) continue;
+    const picks = nflBoards.map(b => b.rank(p)).filter(v => v != null && v > 0);
+    if (!picks.length) continue;
+    const avg = Math.exp(picks.reduce((t, v) => t + Math.log(v), 0) / picks.length);
+    lastListed = Math.max(lastListed, avg);
+    est.set(p, p.proj?.pick ? Math.exp(0.7 * Math.log(avg) + 0.3 * Math.log(p.proj.pick)) : avg);
+  }
+  const past = Math.max(33, lastListed + 1);
+  for (const p of list) if (!p.draft && !est.has(p) && p.proj?.pick) est.set(p, Math.max(p.proj.pick, past + p.proj.pick / 4));
+  const byPos = {};
+  for (const p of est.keys()) (byPos[p.pos] ||= []).push(p);
+  for (const [pos, arr] of Object.entries(byPos)) {
+    const sl = slots[pos] || [];
+    arr.sort((a, b) => est.get(a) - est.get(b)).forEach((p, k) => {
+      const floor = k < sl.length ? sl[k] : LAST;
+      if (k > 0 && floor > est.get(p)) est.set(p, Math.exp(0.65 * Math.log(est.get(p)) + 0.35 * Math.log(floor)));
+    });
+  }
+  const out = new Map(), taken = new Set();
+  for (const p of [...est.keys()].sort((a, b) => est.get(a) - est.get(b))) {
+    let k = Math.max(1, Math.round(est.get(p)));
+    while (taken.has(k)) k++;
+    taken.add(k);
+    if (k <= LAST) out.set(p, k);
+  }
+  return out;
+}
+
+/**
  * Consensus order for a class, led by what people outside this app say: online NFL mock drafts and boards you pasted
  * (weight 1.6 each; the mocks 0.8 once you've pasted fantasy rankings, since they rank for the NFL draft), real
  * rookie-draft ADP (0.4), dynasty market value (0.3) and expert rankings (0.25). Our own models fill in behind them: the
@@ -79,13 +118,17 @@ function capitalCurves(history) {
  * Boards you paste can say which format they're for: one made for your format counts fully, one made for another
  * counts half, adjusted to yours (a 1QB board's QBs move up in superflex, a TE-premium board's TEs move down without it).
  */
-export function consensus(list, { sf, tePts = tePremium(), history = [], boards = [], teOrder = null, W = {} }) {
+export function consensus(list, { sf, tePts = tePremium(), history = [], boards = [], teOrder = null, W = {}, slots = null }) {
   // with TE premium, first rank the class without it to know which tight end is the TE1, TE2…
   if (tePts > 0 && !teOrder) {
     const k = new Map();
-    consensus(list, { sf, tePts: 0, history, boards, W }).board.filter(x => x.p.pos === 'TE').forEach((x, i) => k.set(x.p, i));
-    return consensus(list, { sf, tePts, history, boards, teOrder: k, W });
+    consensus(list, { sf, tePts: 0, history, boards, W, slots }).board.filter(x => x.p.pos === 'TE').forEach((x, i) => k.set(x.p, i));
+    return consensus(list, { sf, tePts, history, boards, teOrder: k, W, slots });
   }
+  // NFL mock drafts you pasted set the projected NFL picks; your other boards are fantasy rankings
+  const nflBoards = boards.filter(b => b.kind === 'nfl');
+  boards = boards.filter(b => b.kind !== 'nfl');
+  const nflMap = nflBoards.length ? nflProjections(list, nflBoards, slots || {}) : null;
   const rankBy = (get, asc) => {
     const have = list.filter(p => get(p) != null).sort((a, b) => (asc ? get(a) - get(b) : get(b) - get(a)));
     return new Map(have.map((p, i) => [p, i + 1]));
@@ -130,13 +173,14 @@ export function consensus(list, { sf, tePts = tePremium(), history = [], boards 
   // they do.
   const capital = capitalCurves(history);
   const capSlot = (pos, pick) => { const f = capital[pos]; return f ? Math.exp(f.a + f.b * Math.log(Math.max(1, pick))) : pick; };
-  const nflPick = p => p.proj?.pick ?? p.mock?.est ?? null;
-  const mocked = list.filter(p => p.mock && !p.draft && nflPick(p) != null).sort((a, b) => nflPick(a) - nflPick(b));
+  const nflPick = p => (nflMap ? nflMap.get(p) ?? null : p.proj?.pick ?? p.mock?.est ?? null);
+  const listed = p => !!p.mock || !!nflMap?.has(p);
+  const mocked = list.filter(p => listed(p) && !p.draft && nflPick(p) != null).sort((a, b) => nflPick(a) - nflPick(b));
   const mockSlots = new Map();
   if (mocked.length) {
     // NFL mocks know nothing of TE premium: their overall half moves tight ends up (the capital half already has it)
     mocked.forEach((p, i) => mockSlots.set(p, 0.5 * capSlot(p.pos, nflPick(p)) + 0.5 * (i + 1) * teAdj(p)));
-    for (const p of list) if (!p.draft && !p.mock) mockSlots.set(p, 0.5 * capSlot(p.pos, Math.max(70, nflPick(p) ?? 120)) + 0.5 * (mocked.length + 30) * teAdj(p));
+    for (const p of list) if (!p.draft && !mockSlots.has(p)) mockSlots.set(p, 0.5 * capSlot(p.pos, Math.max(70, nflPick(p) ?? 120)) + 0.5 * (mocked.length + 30) * teAdj(p));
   }
   // boards you pasted (KeepTradeCut, Draft Sharks, Dynasty Nerds, Reddit…): their ranks for the player, adjusted to
   // your format when a board was made for another one (which then counts half). A board that doesn't say is taken as
@@ -169,7 +213,7 @@ export function consensus(list, { sf, tePts = tePremium(), history = [], boards 
   const all = () => true;
   const signals = [
     { label: `your pasted board${boards.length === 1 ? '' : 's'} (${boards.map(b => (fmtName(b.qb, b.tep, b.base) ? `${b.name}: ${fmtName(b.qb, b.tep, b.base)}` : b.name)).join(', ')})`, w: boardsWeight, m: rankBy(yours, true), community: all },
-    { label: 'online NFL mock-draft consensus (Pro Football Network)', w: mockW, m: mockSlots, community: p => !!p.mock },
+    { label: nflMap ? `NFL mock drafts (your pasted ${nflBoards.map(b => b.name).join(', ')}, with the online consensus)` : 'online NFL mock-draft consensus (Pro Football Network)', w: mockW, m: mockSlots, community: listed },
     { label: 'rookie ADP', w: 0.4, m: rankBy(p => p.adp?.rookie ?? null, true), adj: teAdj, community: all },
     { label: 'market value', w: 0.3, m: rankBy(market, false), community: all },
     // FantasyPros rookie rankings are 1QB without TE premium: QBs move up in superflex, TEs with TE premium
@@ -205,7 +249,7 @@ export function consensus(list, { sf, tePts = tePremium(), history = [], boards 
   }
   out.sort((a, b) => a.slot - b.slot);
   out.forEach((x, i) => { x.rank = i + 1; });
-  return { board: out, used: signals.filter(s => s.m.size).map(s => s.label) };
+  return { board: out, used: signals.filter(s => s.m.size).map(s => s.label), nfl: nflMap };
 }
 
 /** Generic league: linear rookie draft, team 1 picks first each round. */

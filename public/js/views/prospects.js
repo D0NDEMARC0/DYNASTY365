@@ -35,7 +35,13 @@ const OTHER_BOARDS = [
 ];
 
 const eligCell = (p, cls) => (p.elig == null ? '—' : p.elig < cls ? `${p.elig} <span class="muted small">returned</span>` : String(p.elig));
+let nflOverride = null; // Map(player -> pick) when you've pasted NFL mock drafts (set per render)
 const projCell = p => {
+  if (nflOverride) {
+    const k = nflOverride.get(p);
+    const t = ` title="${esc(`From your pasted NFL mock drafts, with the online consensus${p.proj?.pick ? ` (without them: #${p.proj.pick})` : ''}`)}"`;
+    return k ? `<span${t}>R${Math.min(7, Math.ceil(k / 32))} · #${k}</span>` : `<span class="muted"${t}>UDFA</span>`;
+  }
   if (!p.proj) return '—';
   const model = p.proj.model ? `#${p.proj.model}` : 'undrafted';
   const tip = p.proj.model === undefined ? '' : ` title="${esc(p.mock ? `From the online mocks (${mockText(p.mock)}). Our stats model alone: ${model}` : `Not in the online mocks · our stats model ${model}, placed after the mocks’ top 40`)}"`;
@@ -68,7 +74,10 @@ export async function render(root, params, query) {
   const classList = data.prospects.filter(p => p.draftClass === st.cls);
   const boards = userBoards(st.cls, classList);
   const history = data.prospects.filter(p => p.status === 'drafted' && p.draftClass !== st.cls);
-  const { board, used } = consensus(classList, { sf, history, boards });
+  const { board, used, nfl } = consensus(classList, { sf, history, boards, slots: meta.draftModel?.slots });
+  nflOverride = nfl || null;
+  const nflPickOf = p => (nfl ? nfl.get(p) ?? null : p.proj?.pick ?? null);
+  const nflBoards = boards.filter(b => b.kind === 'nfl');
   const mockRank = new Map(board.map(x => [x.p, x.rank]));
   // your own board for this class (My board): the big board's order until you change it
   const byKey = new Map(classList.map(p => [pkey(p), p]));
@@ -147,7 +156,7 @@ export async function render(root, params, query) {
       <div class="bhead">
         <div>
           <h2 style="margin:0">Your boards</h2>
-          <p class="muted small" style="margin:4px 0 0">Paste a ranking or mock draft from any site you read (KeepTradeCut, Draft Sharks, Dynasty Nerds, Dynasty League Football, Footballguys, RotoBaller, a r/DynastyFF post, any ${st.cls} mock) and say which format it’s for. One board for your format (${esc(fmtName)}) counts as much as the online mock consensus, and two or three count up to twice as much; boards for another format count half, adjusted to yours (a 1QB board’s QBs move up in superflex; a board without TE premium moves tight ends up when you use TE premium). Mark one as your base and the order starts from it (it counts about as much as everything else together), with the other signals still moving players. Each gets its own column; paste two or three and the board follows their consensus. These sites don’t allow apps to collect their rankings, so copy them yourself: they’re saved only in this browser.</p>
+          <p class="muted small" style="margin:4px 0 0">Paste a ranking or mock draft from any site you read (KeepTradeCut, Draft Sharks, Dynasty Nerds, Dynasty League Football, Footballguys, RotoBaller, a r/DynastyFF post, any ${st.cls} mock) and say which format it’s for. One board for your format (${esc(fmtName)}) counts as much as the online mock consensus, and two or three count up to twice as much; boards for another format count half, adjusted to yours (a 1QB board’s QBs move up in superflex; a board without TE premium moves tight ends up when you use TE premium). An NFL mock draft (Tankathon, NFL Draft Buzz…) marked as one sets the projected NFL picks, the NFL mock and how the big board reads draft capital. Mark a fantasy board as your base and the order starts from it (it counts about as much as everything else together), with the other signals still moving players. Each gets its own column; paste two or three and the board follows their consensus. These sites don’t allow apps to collect their rankings, so copy them yourself: they’re saved only in this browser.</p>
         </div>
         ${st.adding ? '' : '<button class="btn" data-act="addboard">+ Paste a board or mock</button>'}
       </div>
@@ -155,7 +164,8 @@ export async function render(root, params, query) {
         <input type="text" data-k="bname" placeholder="Source (e.g. Footballguys)" maxlength="32">
         <div class="toolbar" style="margin:0"><select data-k="bqb" aria-label="QB format"><option value="">Any QB format</option><option value="1" ${sf ? '' : 'selected'}>1QB</option><option value="2" ${sf ? 'selected' : ''}>Superflex</option></select>
           <select data-k="btep" aria-label="TE premium"><option value="">No TE premium</option><option value="1" ${tep ? 'selected' : ''}>TE premium</option></select>
-          <label class="small"><input type="checkbox" data-k="bbase"> Use as my base</label></div>
+          <label class="small"><input type="checkbox" data-k="bbase"> Use as my base</label>
+          <select data-k="bkind" aria-label="Kind of board"><option value="fantasy">Fantasy ranking or rookie mock</option><option value="nfl">NFL mock draft (Tankathon, NFL Draft Buzz…)</option></select></div>
         <textarea data-k="btext" rows="8" placeholder="One player per line, best first. Rankings or mock drafts both work, e.g.&#10;1. Jeremiah Smith WR Ohio State&#10;2. Raiders — Julian Sayin, QB, Ohio State"></textarea>
         <div class="toolbar" style="margin:0"><button class="btn primary" data-act="saveboard">Add board</button><button class="btn" data-act="cancelboard">Cancel</button><span class="small" data-bmsg></span></div>
       </div>` : ''}
@@ -163,6 +173,7 @@ export async function render(root, params, query) {
       ${boards.length ? `<ul class="blist">${boards.map(b => `<li><b>${esc(b.name)}</b> <span class="muted small">${b.matched} matched · added ${esc(b.date)}</span>
         <select class="bfmt" data-bfmt="qb" data-id="${esc(b.id)}" aria-label="QB format of ${esc(b.name)}"><option value="">Any QB format</option><option value="1" ${b.qb === '1' ? 'selected' : ''}>1QB</option><option value="2" ${b.qb === '2' ? 'selected' : ''}>Superflex</option></select>
         <select class="bfmt" data-bfmt="tep" data-id="${esc(b.id)}" aria-label="TE premium of ${esc(b.name)}"><option value="">No TE premium</option><option value="1" ${b.tep ? 'selected' : ''}>TE premium</option></select>
+        <select class="bfmt" data-bfmt="kind" data-id="${esc(b.id)}" aria-label="Kind of board: ${esc(b.name)}"><option value="fantasy">Fantasy ranking</option><option value="nfl" ${b.kind === 'nfl' ? 'selected' : ''}>NFL mock draft</option></select>
         <label class="small" title="Your base board counts about as much as every other signal together"><input type="checkbox" class="bfmt" data-bfmt="base" data-id="${esc(b.id)}" ${b.base ? 'checked' : ''}> Base</label>
         <button class="linkbtn" data-act="rmboard" data-id="${esc(b.id)}">Remove</button>
         ${b.unmatched.length ? `<details class="small"><summary>${b.unmatched.length} line${b.unmatched.length === 1 ? '' : 's'} not matched to a ${st.cls} prospect</summary><div class="muted">${b.unmatched.slice(0, 40).map(esc).join('<br>')}</div></details>` : ''}</li>`).join('')}</ul>` : ''}
@@ -310,16 +321,19 @@ export async function render(root, params, query) {
     const order = await loadOrder();
     if (!order?.teams?.length) { body.innerHTML = '<div class="empty">The NFL draft order isn’t available yet (it’s built from this season’s results).</div>'; return; }
     const N = order.teams.length, maxRound = st.nflAll ? 7 : 3;
-    const picks = classList.filter(p => !p.draft && p.proj?.pick && p.proj.pick <= N * maxRound && filterQ(p)).sort((a, b) => a.proj.pick - b.proj.pick);
-    const src = p => (p.mock?.recent != null ? `mocks: #${Math.round(p.mock.recent)} in ${p.mock.recentN} of the latest ${p.mock.recentM}`
+    const at = new Map(classList.map(p => [p, nflPickOf(p)]));
+    const picks = classList.filter(p => !p.draft && at.get(p) && at.get(p) <= N * maxRound && filterQ(p)).sort((a, b) => at.get(a) - at.get(b));
+    const pasted = p => nflBoards.map(b => [b.name, b.rank(p)]).filter(([, r]) => r != null);
+    const src = p => (pasted(p).length ? `your mocks: ${pasted(p).map(([n, r]) => `#${r} ${n}`).join(', ')}${p.mock?.recent != null ? ` · online: #${Math.round(p.mock.recent)}` : ''}`
+      : p.mock?.recent != null ? `mocks: #${Math.round(p.mock.recent)} in ${p.mock.recentN} of the latest ${p.mock.recentM}`
       : p.mock ? `mocks: season-long #${p.mock.rank}` : 'draft model (not in the online mocks)');
     const rec = t => `${t.w}-${t.l}${t.t ? `-${t.t}` : ''}`;
-    const rounds = [...new Set(picks.map(p => Math.ceil(p.proj.pick / N)))];
+    const rounds = [...new Set(picks.map(p => Math.ceil(at.get(p) / N)))];
     body.innerHTML = `
-      <p class="muted small" style="margin:0 0 10px">The ${order.draft} NFL draft if the season ended today: draft order from ${order.season} records through week ${order.week} (worst record first; ties go to the easier schedule), the same order every round. Only QBs, RBs, WRs and TEs are shown; the picks in between go to other positions. Each player sits at his projected NFL pick: the latest online mocks, spaced so a position can’t take more of a round than drafts usually give it, one player per pick. Traded and compensatory picks aren’t modeled.</p>
-      ${rounds.map(r => `<div class="card"><h2>Round ${r}</h2><div class="lineup">${picks.filter(p => Math.ceil(p.proj.pick / N) === r).map(p => {
-        const slot = (p.proj.pick - 1) % N, t = order.teams[slot];
-        return `<div class="slot nflpick"><span class="sl">${p.proj.pick}<br><span class="muted">${r}.${String(slot + 1).padStart(2, '0')}</span></span>
+      <p class="muted small" style="margin:0 0 10px">The ${order.draft} NFL draft if the season ended today: draft order from ${order.season} records through week ${order.week} (worst record first; ties go to the easier schedule), the same order every round. Only QBs, RBs, WRs and TEs are shown; the picks in between go to other positions. Each player sits at his projected NFL pick: ${nflBoards.length ? `your pasted NFL mock drafts (${nflBoards.map(b => esc(b.name)).join(', ')}) as the baseline, with the online consensus` : 'the latest online mocks (paste a Tankathon or NFL Draft Buzz mock below as an NFL mock to make it the baseline)'}, spaced so a position can’t take more of a round than drafts usually give it, one player per pick. Traded and compensatory picks aren’t modeled.</p>
+      ${rounds.map(r => `<div class="card"><h2>Round ${r}</h2><div class="lineup">${picks.filter(p => Math.ceil(at.get(p) / N) === r).map(p => {
+        const pk = at.get(p), slot = (pk - 1) % N, t = order.teams[slot];
+        return `<div class="slot nflpick"><span class="sl">${pk}<br><span class="muted">${r}.${String(slot + 1).padStart(2, '0')}</span></span>
           <span class="nflteam"><img src="${esc(logo(t.team))}" alt="" width="26" height="26" loading="lazy" onerror="this.style.visibility='hidden'"><b>${esc(t.team)}</b><span class="muted small">${rec(t)}</span></span>
           <div>${playerCell(p)}<div class="muted small" style="margin-top:2px">${esc(src(p))}${p.score != null ? ` · score ${p.score}` : ''}</div></div></div>`;
       }).join('')}</div></div>`).join('') || '<div class="empty">No players match.</div>'}`;
@@ -346,7 +360,7 @@ export async function render(root, params, query) {
       if (a === 'cancelboard') { st.adding = false; st.msg = ''; draw(); return; }
       if (a === 'saveboard') {
         const name = el.querySelector('[data-k="bname"]')?.value || '', text = el.querySelector('[data-k="btext"]')?.value || '';
-        const r = addBoard(st.cls, name, text, classList, { qb: el.querySelector('[data-k="bqb"]')?.value || '', tep: el.querySelector('[data-k="btep"]')?.value === '1', base: !!el.querySelector('[data-k="bbase"]')?.checked });
+        const r = addBoard(st.cls, name, text, classList, { qb: el.querySelector('[data-k="bqb"]')?.value || '', tep: el.querySelector('[data-k="btep"]')?.value === '1', base: !!el.querySelector('[data-k="bbase"]')?.checked, kind: el.querySelector('[data-k="bkind"]')?.value || 'fantasy' });
         if (r.error) { el.querySelector('[data-bmsg]').innerHTML = `<span class="down">${esc(r.error)}</span>`; return; }
         st.adding = false;
         st.msg = `Added <b>${esc(r.board.name)}</b>: ${r.res.matched} players matched${r.res.unmatched.length ? `, ${r.res.unmatched.length} lines not matched` : ''}.${r.warning ? ` <span class="down">${esc(r.warning)}</span>` : ''}`;
@@ -375,7 +389,7 @@ export async function render(root, params, query) {
   el.addEventListener('change', e => {
     const f = e.target.dataset.bfmt;
     if (!f) return;
-    updateBoard(st.cls, e.target.dataset.id, f === 'qb' ? { qb: e.target.value } : f === 'base' ? { base: e.target.checked } : { tep: e.target.value === '1' });
+    updateBoard(st.cls, e.target.dataset.id, f === 'qb' ? { qb: e.target.value } : f === 'base' ? { base: e.target.checked } : f === 'kind' ? { kind: e.target.value } : { tep: e.target.value === '1' });
     st.msg = '';
     render(root, params, query);
   });

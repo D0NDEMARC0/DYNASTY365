@@ -141,7 +141,7 @@ async function collegeContext() {
   const classes = [...new Set(onBoard.map(p => p.draftClass))].sort((a, b) => a - b);
   for (const cls of classes) {
     const list = onBoard.filter(p => p.draftClass === cls);
-    for (const x of consensus(list, { sf, history, boards: userBoards(cls, list) }).board) board.set(String(x.p.cid), { cls, rank: x.rank });
+    for (const x of consensus(list, { sf, history, boards: userBoards(cls, list), slots: pdata.meta.draftModel?.slots }).board) board.set(String(x.p.cid), { cls, rank: x.rank });
   }
   return (cctx = { v: S.version, pool, board, classes });
 }
