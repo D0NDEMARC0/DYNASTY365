@@ -113,7 +113,8 @@ export async function weeklyStats(season, current) {
     'game_id', 'team', 'opponent_team', 'completions', 'attempts', 'passing_yards', 'passing_tds', 'passing_interceptions', 'sacks_suffered',
     'passing_first_downs', 'passing_2pt_conversions', 'carries', 'rushing_yards', 'rushing_tds', 'rushing_first_downs', 'rushing_2pt_conversions',
     'rushing_fumbles_lost', 'receptions', 'targets', 'receiving_yards', 'receiving_tds', 'receiving_first_downs', 'receiving_2pt_conversions',
-    'receiving_fumbles_lost', 'sack_fumbles_lost', 'special_teams_tds', 'fantasy_points', 'fantasy_points_ppr']);
+    'receiving_fumbles_lost', 'sack_fumbles_lost', 'special_teams_tds', 'fantasy_points', 'fantasy_points_ppr',
+    'receiving_air_yards', 'receiving_yards_after_catch', 'passing_air_yards', 'passing_yards_after_catch']);
   return rows.filter(r => r.season_type === 'REG' && ['QB', 'RB', 'WR', 'TE', 'FB'].includes(r.position));
 }
 

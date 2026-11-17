@@ -241,7 +241,12 @@ function history(p, years) {
     WR: [['Tgt', y => b(y).tgt], ['Rec', y => b(y).rec], ['Yds', y => fmtInt(b(y).reyd)], ['TD', y => b(y).retd]],
     TE: [['Tgt', y => b(y).tgt], ['Rec', y => b(y).rec], ['Yds', y => fmtInt(b(y).reyd)], ['TD', y => b(y).retd]],
   }[pos] || [];
-  const adv = { QB: ['snap', 'epadb', 'cpoe', 'padot', 'skr', 'twp'], RB: ['snap', 'routes', 'rp', 'ypc', 'exp10', 'ryoe', 'yaco', 'osh', 'tsh', 'yprr'], WR: ['snap', 'routes', 'rp', 'yprr', 'tprr', 'tsh', 'aysh', 'adot', 'sep', 'yacoe'], TE: ['snap', 'routes', 'rp', 'yprr', 'tprr', 'tsh', 'adot', 'sep'] }[pos] || [];
+  const adv = {
+    QB: ['snap', 'epadb', 'cpoe', 'pay', 'padot', 'pcayc', 'pyacc', 'skr', 'twp'],
+    RB: ['snap', 'routes', 'rp', 'ypc', 'exp10', 'ryoe', 'yaco', 'osh', 'tsh', 'yprr', 'yac', 'yacr'],
+    WR: ['snap', 'routes', 'rp', 'yprr', 'tprr', 'tsh', 'aysh', 'ay', 'adot', 'yac', 'yacr', 'yacp', 'sep', 'yacoe'],
+    TE: ['snap', 'routes', 'rp', 'yprr', 'tprr', 'tsh', 'ay', 'adot', 'yac', 'yacr', 'yacp', 'sep'],
+  }[pos] || [];
   const cols = [
     ...base,
     ...extra.map(([label, fn], i) => ({ key: `e${i}`, label, n: true, cell: y => n(fn(y)) })),
@@ -263,8 +268,13 @@ function gameLog(p, games, est = false) {
     ...(p.pos !== 'QB' && games.some(g => g[18] != null) ? [{ key: 'rt', label: 'Routes', n: true, title: 'Routes run: his on-field dropbacks (nflverse participation) × his position’s route rate; for the season in progress, estimated from snap share × team dropbacks (marked ~)', cell: g => n(g[18] != null ? `${est ? '~' : ''}${g[18]}` : '—') }] : []),
   ];
   const stat = (label, i) => ({ key: label, label, n: true, cell: g => n(g[i]) });
-  if (p.pos === 'QB') cols.push({ key: 'ca', label: 'Cmp/Att', n: true, cell: g => n(`${g[11]}/${g[12]}`) }, stat('Pass yds', 13), stat('TD', 14), stat('INT', 15), stat('Car', 8), stat('Rush yds', 9), stat('Rush TD', 10));
-  else if (p.pos === 'RB') cols.push(stat('Car', 8), stat('Rush yds', 9), stat('Rush TD', 10), stat('Tgt', 5), stat('Rec', 4), stat('Rec yds', 6), stat('Rec TD', 7));
-  else cols.push(stat('Tgt', 5), stat('Rec', 4), stat('Yds', 6), stat('TD', 7), stat('Car', 8), stat('Rush yds', 9));
+  // air yards and yards after the catch each week (nflverse weekly stats), when the season's logs have them
+  const has = i => games.some(g => g[i] != null);
+  const ay = (label, i, title) => ({ key: label, label, n: true, title, cell: g => n(g[i] != null ? Math.round(g[i]) : '—') });
+  const rec = has(19) ? [ay('Air yds', 19, 'Air yards on his targets'), ay('YAC', 20, 'Receiving yards after the catch')] : [];
+  if (p.pos === 'QB') cols.push({ key: 'ca', label: 'Cmp/Att', n: true, cell: g => n(`${g[11]}/${g[12]}`) }, stat('Pass yds', 13), stat('TD', 14), stat('INT', 15),
+    ...(has(21) ? [ay('Air yds', 21, 'Air yards on all his attempts'), ay('YAC', 22, 'Yards after the catch on his completions')] : []), stat('Car', 8), stat('Rush yds', 9), stat('Rush TD', 10));
+  else if (p.pos === 'RB') cols.push(stat('Car', 8), stat('Rush yds', 9), stat('Rush TD', 10), stat('Tgt', 5), stat('Rec', 4), stat('Rec yds', 6), stat('Rec TD', 7), ...rec);
+  else cols.push(stat('Tgt', 5), stat('Rec', 4), stat('Yds', 6), stat('TD', 7), ...rec, stat('Car', 8), stat('Rush yds', 9));
   return table({ cols, rows: games });
 }

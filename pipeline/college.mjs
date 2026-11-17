@@ -197,6 +197,12 @@ export async function loadSeason(season, current) {
       // efficiency
       ypc: rd(div(o.ruyd, o.car), 2), ypr: rd(div(o.reyd, o.rec), 1), ypt: rd(div(o.reyd, tgt), 2), catch: rd(div(o.rec, tgt)),
       epat: rd(div(o.aRecEpa, o.aTgt), 2), rsr: rd(div(o.aRecSr, o.aTgt)), adot: rd(div(o.air, o.airTgt), 1), yacr: rd(div(o.yac, o.yacRec), 1),
+      // totals: air yards and YAC are charted on only part of college passes, so a total is his charted rate × all his
+      // targets (air yards) or catches (YAC)
+      ay: o.airTgt && tgt ? Math.round((o.air / o.airTgt) * tgt) : null,
+      yac: o.yacRec && o.rec ? Math.round((o.yac / o.yacRec) * o.rec) : null,
+      yacp: o.yacRec && o.reyd > 0 ? rd(Math.min(1, ((o.yac / o.yacRec) * o.rec) / o.reyd)) : null,
+      ybcr: o.yacRec && o.rec ? rd((o.reyd - (o.yac / o.yacRec) * o.rec) / o.rec, 1) : null,
       epar: rd(div(o.aRushEpa, o.aCar), 2), rusr: rd(div(o.aRushSr, o.aCar)),
       exp: rd(div(o.exp, o.opp)), sr: rd(div(o.succ, o.opp)), epao: rd(div(o.epa, o.opp), 2),
       scpg: rd(div(o.ruyd + o.reyd, g), 1),
@@ -206,6 +212,7 @@ export async function loadSeason(season, current) {
       ypa: rd(div(o.pyd, o.pa), 2), epap: rd(div(o.aPassEpa, (o.aAtt || 0) + (o.aSk || 0)), 2),
       cpoe: rd(o.aAtt ? ((o.aComp - o.aXComp) / o.aAtt) * 100 - leagueCpoe : null, 1), psr: rd(div(o.aPassSr, (o.aAtt || 0) + (o.aSk || 0))),
       skr: rd(div(o.aSk, (o.aAtt || 0) + (o.aSk || 0))), padot: rd(div(o.pAir, o.pAirAtt), 1),
+      pay: o.pAirAtt && o.pa ? Math.round((o.pAir / o.pAirAtt) * o.pa) : null, // passing air yards: charted rate × attempts
       rzt: o.rzt, rzr: o.rzr, rztd: o.rztd,
       // play-by-play metrics
       exp10: rd(div(o.r10 || 0, o.pCar)), exp15: rd(div(o.r15 || 0, o.pCar)), stuff: rd(div(o.stf || 0, o.pCar)),

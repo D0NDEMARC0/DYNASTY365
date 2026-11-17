@@ -150,10 +150,10 @@ function breakoutText(bk, pos) {
 
 function careerTable(pos, career) {
   const keys = {
-    WR: ['g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'routes', 'yprr', 'yptpa', 'epat', 'rec20r'],
-    TE: ['g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'routes', 'yprr', 'yptpa', 'epat', 'rec20r'],
-    RB: ['g', 'car', 'ruyd', 'rutd', 'ypc', 'exp10', 'stuff', 'brk', 'rec', 'reyd', 'routes', 'scsh', 'rdom', 'epar'],
-    QB: ['g', 'pa', 'pyd', 'ptd', 'int', 'ypa', 'epap', 'cpoe', 'qcar', 'qruyd', 'qypc', 'rutd'],
+    WR: ['g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'routes', 'ay', 'adot', 'yac', 'yacr', 'yprr', 'yptpa', 'epat', 'rec20r'],
+    TE: ['g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'routes', 'ay', 'adot', 'yac', 'yacr', 'yprr', 'yptpa', 'epat', 'rec20r'],
+    RB: ['g', 'car', 'ruyd', 'rutd', 'ypc', 'exp10', 'stuff', 'brk', 'rec', 'reyd', 'routes', 'yac', 'yacr', 'scsh', 'rdom', 'epar'],
+    QB: ['g', 'pa', 'pyd', 'ptd', 'int', 'ypa', 'epap', 'cpoe', 'pay', 'padot', 'qcar', 'qruyd', 'qypc', 'rutd'],
   }[pos] || [];
   const cols = [
     { key: 'season', label: 'Season', cell: s => `<td>${s.season}</td>` },

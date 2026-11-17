@@ -68,6 +68,10 @@ export const M = {
   screen: { label: 'Screen %', fmt: pct, desc: 'Share of targets on screen passes', src: 'FTN charting' },
   epat: { label: 'EPA/tgt', fmt: sgn(d2), desc: 'Expected points added per target', src: 'nflverse' },
   yacr: { label: 'YAC/rec', fmt: d1, desc: 'Yards after catch per reception', src: 'nflverse' },
+  ay: { label: 'Air yds', fmt: int, desc: 'Air yards on his targets: how far past the line of scrimmage the passes thrown to him were caught or would have been, in total', src: 'nflverse' },
+  ybcr: { label: 'Air yds/rec', fmt: d1, desc: 'Yards before the catch per reception: how far downfield his catches were made', src: 'nflverse' },
+  yac: { label: 'YAC', fmt: int, desc: 'Receiving yards after the catch, in total', src: 'nflverse' },
+  yacp: { label: 'YAC %', fmt: pct, desc: 'Share of his receiving yards gained after the catch', src: 'nflverse' },
   racr: { label: 'RACR', fmt: d2, desc: 'Receiver air conversion ratio: receiving yards ÷ air yards', src: 'nflverse' },
   rec20: { label: '20+ rec', fmt: int, desc: 'Receptions of 20+ yards', src: 'nflverse' },
   deep: { label: 'Deep tgt %', fmt: pct, desc: 'Share of targets 20+ air yards downfield', src: 'nflverse' },
@@ -88,6 +92,12 @@ export const M = {
   epadb: { label: 'EPA/db', fmt: sgn(d2), desc: 'Expected points added per dropback', src: 'nflverse' },
   cpoe: { label: 'CPOE', fmt: sgn(d1), desc: 'Completion % over expected', src: 'nflverse' },
   padot: { label: 'aDOT', fmt: d1, desc: 'Average depth of target on attempts', src: 'nflverse' },
+  pay: { label: 'Pass air yds', fmt: int, desc: 'Air yards on all his pass attempts, completed or not', src: 'nflverse' },
+  pcay: { label: 'Comp. air yds', fmt: int, desc: 'Air yards on his completions, in total', src: 'nflverse' },
+  pcayc: { label: 'Air yds/cmp', fmt: d1, desc: 'Air yards per completion: how far downfield his completions were caught', src: 'nflverse' },
+  pyac: { label: 'YAC on cmp', fmt: int, desc: 'Yards his receivers gained after the catch on his completions, in total', src: 'nflverse' },
+  pyacc: { label: 'YAC/cmp', fmt: d1, desc: 'Yards after the catch per completion', src: 'nflverse' },
+  pyacp: { label: 'YAC % of pass yds', fmt: pct, desc: 'Share of his passing yards gained after the catch (lower = more of it through the air)', src: 'nflverse' },
   deepr: { label: 'Deep %', fmt: pct, desc: 'Share of attempts 20+ air yards', src: 'nflverse' },
   skr: { label: 'Sack %', fmt: pct, desc: 'Sacks ÷ dropbacks (lower is better)', src: 'nflverse' },
   twp: { label: 'INT-worthy %', fmt: pct, desc: 'Interception-worthy throws ÷ dropbacks (lower is better)', src: 'FTN charting' },
@@ -125,10 +135,10 @@ export const LOWER_BETTER = new Set(['drop', 'stuff', 'skr', 'twp', 'press', 'ba
 
 // Column sets for the analytics explorer, per position. Imported columns appear only when data exists.
 export const COLUMNS = {
-  WR: ['ppg', 'xfp', 'fpoe', 'snap', 'routes', 'rp', 'tsh', 'frs', 'aysh', 'wopr', 'tprr', 'yprr', 'yprrMan', 'yprrZone', 'adot', 'sep', 'cush', 'yacoe', 'catch', 'drop', 'contc', 'epat', 'fdrr', 'btr', 'rzTgt', 'x_grade', 'x_routeGrade', 'x_winRate', 'score'],
-  TE: ['ppg', 'xfp', 'fpoe', 'snap', 'routes', 'rp', 'tsh', 'frs', 'aysh', 'tprr', 'yprr', 'yprrMan', 'yprrZone', 'adot', 'sep', 'yacoe', 'catch', 'drop', 'epat', 'fdrr', 'rzTgt', 'ezTgt', 'x_grade', 'x_routeGrade', 'score'],
-  RB: ['ppg', 'xfp', 'fpoe', 'snap', 'routes', 'rp', 'csh', 'osh', 'tsh', 'hvtpg', 'ypc', 'exp10', 'exp15', 'stuff', 'succ', 'ryoe', 'ryoepct', 'yaco', 'ybco', 'btr', 'box8', 'epar', 'yprr', 'rzCar', 'i5', 'x_grade', 'x_runGrade', 'x_elusive', 'score'],
-  QB: ['ppg', 'xfp', 'fpoe', 'snap', 'db', 'epadb', 'cpoe', 'fread', 'chkr', 'padot', 'deepr', 'skr', 'twp', 'bad', 'press', 'ttt', 'aggr', 'par', 'ratt', 'rypc', 'ruypg', 'scr', 'x_grade', 'x_passGrade', 'x_btt', 'score'],
+  WR: ['ppg', 'xfp', 'fpoe', 'snap', 'routes', 'rp', 'tsh', 'frs', 'aysh', 'wopr', 'tprr', 'yprr', 'yprrMan', 'yprrZone', 'ay', 'adot', 'ybcr', 'yac', 'yacr', 'yacp', 'yacoe', 'racr', 'sep', 'cush', 'catch', 'drop', 'contc', 'epat', 'fdrr', 'btr', 'rzTgt', 'x_grade', 'x_routeGrade', 'x_winRate', 'score'],
+  TE: ['ppg', 'xfp', 'fpoe', 'snap', 'routes', 'rp', 'tsh', 'frs', 'aysh', 'tprr', 'yprr', 'yprrMan', 'yprrZone', 'ay', 'adot', 'ybcr', 'yac', 'yacr', 'yacp', 'yacoe', 'racr', 'sep', 'catch', 'drop', 'epat', 'fdrr', 'rzTgt', 'ezTgt', 'x_grade', 'x_routeGrade', 'score'],
+  RB: ['ppg', 'xfp', 'fpoe', 'snap', 'routes', 'rp', 'csh', 'osh', 'tsh', 'hvtpg', 'ypc', 'exp10', 'exp15', 'stuff', 'succ', 'ryoe', 'ryoepct', 'yaco', 'ybco', 'btr', 'box8', 'epar', 'yprr', 'yac', 'yacr', 'yacoe', 'rzCar', 'i5', 'x_grade', 'x_runGrade', 'x_elusive', 'score'],
+  QB: ['ppg', 'xfp', 'fpoe', 'snap', 'db', 'epadb', 'cpoe', 'fread', 'chkr', 'pay', 'padot', 'pcayc', 'pyacc', 'pyacp', 'deepr', 'skr', 'twp', 'bad', 'press', 'ttt', 'aggr', 'par', 'ratt', 'rypc', 'ruypg', 'scr', 'x_grade', 'x_passGrade', 'x_btt', 'score'],
 };
 
 // Percentile bars on the player page.

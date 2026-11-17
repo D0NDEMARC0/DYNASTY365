@@ -39,6 +39,11 @@ export const CM = {
   rsr: { label: 'Rec success', fmt: pct, desc: 'Share of targets with positive EPA' },
   adot: { label: 'aDOT', fmt: d1, desc: 'Average depth of target (where charted)' },
   yacr: { label: 'YAC/rec', fmt: d1, desc: 'Yards after catch per reception (where charted)' },
+  ay: { label: 'Air yds (est.)', fmt: int, desc: 'Air yards on his targets in total: his aDOT on charted targets × all his targets (college play-by-play charts air yards on only part of passes)' },
+  ybcr: { label: 'Air yds/rec (est.)', fmt: d1, desc: 'Yards before the catch per reception: receiving yards minus estimated YAC, per catch' },
+  yac: { label: 'YAC (est.)', fmt: int, desc: 'Yards after the catch in total: his YAC per charted catch × all his catches' },
+  yacp: { label: 'YAC % (est.)', fmt: pct, desc: 'Share of his receiving yards gained after the catch' },
+  pay: { label: 'Pass air yds (est.)', fmt: int, desc: 'Air yards on all his attempts: his aDOT on charted attempts × all attempts' },
   epar: { label: 'EPA/rush', fmt: sgn(d2), desc: 'Expected points added per carry' },
   rusr: { label: 'Rush success', fmt: pct, desc: 'Share of carries with positive EPA' },
   exp: { label: 'Explosive %', fmt: pct, desc: 'Explosive plays per opportunity (carries + targets)' },
@@ -73,10 +78,10 @@ export const CM = {
 for (const m of Object.values(CM)) m.src = SRC;
 
 export const C_COLUMNS = {
-  WR: ['elig', 'g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'bkAge', 'routes', 'yprr', 'tprr', 'yptpa', 'ypt', 'catch', 'epat', 'rsr', 'rec20r', 'deep', 'adot', 'yacr', 'fdt', 'rztd'],
-  TE: ['elig', 'g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'bkAge', 'routes', 'yprr', 'tprr', 'yptpa', 'ypt', 'catch', 'epat', 'rsr', 'rec20r', 'deep', 'adot', 'yacr', 'fdt', 'rztd'],
-  RB: ['elig', 'g', 'car', 'ruyd', 'rutd', 'ypc', 'exp10', 'exp15', 'stuff', 'brk', 'lypc', 'epar', 'rusr', 'csh', 'scsh', 'rdom', 'bkAge', 'tsh', 'rec', 'reyd', 'routes', 'yprr', 'scpg', 'rztd'],
-  QB: ['elig', 'g', 'pa', 'pyd', 'ptd', 'int', 'ypa', 'epap', 'cpoe', 'psr', 'skr', 'padot', 'qcar', 'qruyd', 'qypc', 'rutd', 'rypg'],
+  WR: ['elig', 'g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'bkAge', 'routes', 'yprr', 'tprr', 'yptpa', 'ypt', 'catch', 'epat', 'rsr', 'rec20r', 'deep', 'ay', 'adot', 'ybcr', 'yac', 'yacr', 'yacp', 'fdt', 'rztd'],
+  TE: ['elig', 'g', 'tgt', 'rec', 'reyd', 'retd', 'tsh', 'dom', 'bkAge', 'routes', 'yprr', 'tprr', 'yptpa', 'ypt', 'catch', 'epat', 'rsr', 'rec20r', 'deep', 'ay', 'adot', 'ybcr', 'yac', 'yacr', 'yacp', 'fdt', 'rztd'],
+  RB: ['elig', 'g', 'car', 'ruyd', 'rutd', 'ypc', 'exp10', 'exp15', 'stuff', 'brk', 'lypc', 'epar', 'rusr', 'csh', 'scsh', 'rdom', 'bkAge', 'tsh', 'rec', 'reyd', 'routes', 'yprr', 'yac', 'yacr', 'scpg', 'rztd'],
+  QB: ['elig', 'g', 'pa', 'pyd', 'ptd', 'int', 'ypa', 'epap', 'cpoe', 'psr', 'skr', 'pay', 'padot', 'qcar', 'qruyd', 'qypc', 'rutd', 'rypg'],
 };
 // not stats: never offered as chart axes
 export const C_NONSTAT = new Set(['g', 'elig']);

@@ -20,6 +20,7 @@ function blank() {
     designed: 0, scrambles: 0,
     // passing
     db: 0, att: 0, cmp: 0, passYds: 0, passTd: 0, int: 0, sacks: 0, qbEpa: 0, cpoeSum: 0, cpoeN: 0, passAy: 0, deepAtt: 0,
+    cAy: 0, cYac: 0, cYds: 0, // completions: air yards, yards after the catch, total yards
     pressured: 0, pressN: 0, intWorthy: 0, pa: 0, oop: 0, ftnDb: 0,
     // usage
     passSnaps: 0, passSnapsEst: false, snapPctSum: 0, snapGames: 0, offSnaps: 0, dbG: {}, sk: 1,
@@ -100,7 +101,10 @@ export function buildSeason({ season, plays, part, ftn, snaps, weekly, pfr2gsis,
           const rd = ch?.read_thrown != null ? String(ch.read_thrown) : null;
           if (READS.has(rd)) { q.qbReadN++; if (rd === '1') q.qbRead1++; if (rd === 'CHK') q.qbChk++; }
           q.att++;
-          if (p.complete_pass) q.cmp++;
+          if (p.complete_pass) {
+            q.cmp++;
+            q.cAy += p.air_yards ?? 0; q.cYac += p.yards_after_catch ?? 0; q.cYds += p.receiving_yards ?? 0;
+          }
           if (p.interception) q.int++;
           if (p.air_yards != null) { q.passAy += p.air_yards; if (p.air_yards >= 20) q.deepAtt++; }
           if (p.cpoe != null) { q.cpoeSum += p.cpoe; q.cpoeN++; }
@@ -348,6 +352,8 @@ export function buildSeason({ season, plays, part, ftn, snaps, weekly, pfr2gsis,
       // first-read targets (FTN): share of the team's first-read targets in his games, and of his own targets
       frs: o.teamRead1 >= 20 ? r(div(o.read1, o.teamRead1)) : null, fr1: o.readTgt >= 15 ? r(div(o.read1, o.readTgt)) : null,
       adot: r(div(o.ay, o.tgt), 1), ay: Math.round(o.ay), yacr: r(div(o.yac, o.rec), 1),
+      // yards after the catch in total and as a share of his receiving yards; air yards per catch (yards before the catch)
+      yac: o.rec ? Math.round(o.yac) : null, yacp: r(div(o.yac, o.recYds)), ybcr: r(div(o.recYds - o.yac, o.rec), 1),
       catch: r(div(o.rec, o.tgt)), epat: r(div(o.recEpa, o.tgt)), rsucc: r(div(o.recSucc, o.tgt)),
       rec20: o.rec20, deep: r(div(o.deepTgt, o.tgt)), racr: r(div(o.recYds, o.ay), 2),
       drop: r(div(o.drops, o.catchable)), cont: r(div(o.contested, o.ftnTgt)), contc: r(div(o.contestedRec, o.contested)),
@@ -357,6 +363,9 @@ export function buildSeason({ season, plays, part, ftn, snaps, weekly, pfr2gsis,
       run20: o.run20, stuff: r(div(o.stuff, o.designed)), succ: r(div(o.rushSucc, o.car)), epar: r(div(o.rushEpa, o.car)),
       // ---- passing ----
       db: o.db, epadb: r(div(o.qbEpa, o.db)), cpoe: r(div(o.cpoeSum, o.cpoeN), 2), padot: r(div(o.passAy, o.att), 1),
+      // passing air yards (all attempts), and how his completions gained their yards: in the air vs after the catch
+      pay: o.att ? Math.round(o.passAy) : null, pcay: o.cmp ? Math.round(o.cAy) : null, pcayc: r(div(o.cAy, o.cmp), 1),
+      pyac: o.cmp ? Math.round(o.cYac) : null, pyacc: r(div(o.cYac, o.cmp), 1), pyacp: r(div(o.cYac, o.cYds)),
       skr: r(div(o.sacks, o.db)), deepr: r(div(o.deepAtt, o.att)), press: o.pressN >= 20 ? r(div(o.pressured, o.pressN)) : null,
       twp: r(div(o.intWorthy, o.ftnDb)), par: r(div(o.pa, o.ftnDb)), oop: r(div(o.oop, o.ftnDb)),
       // read progression (FTN): how often he throws to his first read, and how often he checks down
@@ -376,7 +385,9 @@ export function buildSeason({ season, plays, part, ftn, snaps, weekly, pfr2gsis,
       return [w.week, w.opponent_team, r(w.fantasy_points ?? 0, 1), r(w.fantasy_points_ppr ?? 0, 1), w.receptions ?? 0, w.targets ?? 0,
         w.receiving_yards ?? 0, w.receiving_tds ?? 0, w.carries ?? 0, w.rushing_yards ?? 0, w.rushing_tds ?? 0,
         w.completions ?? 0, w.attempts ?? 0, w.passing_yards ?? 0, w.passing_tds ?? 0, w.passing_interceptions ?? 0,
-        sn ? r(sn.pct, 2) : null, w._rk_ppr ?? null, weekRoutes(o, pos, w.game_id, sn)];
+        sn ? r(sn.pct, 2) : null, w._rk_ppr ?? null, weekRoutes(o, pos, w.game_id, sn),
+        // 19-22: receiving air yards and YAC, passing air yards and YAC (nflverse weekly stats)
+        w.receiving_air_yards ?? null, w.receiving_yards_after_catch ?? null, w.passing_air_yards ?? null, w.passing_yards_after_catch ?? null];
     }));
   }
 
